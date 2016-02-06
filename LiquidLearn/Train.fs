@@ -9,6 +9,32 @@ open LiquidLearn.Utils
 
 // create sets of gates used in the training algorithms
 module Gates =
+    module Matrices =
+        // some standard matrices
+        let PauliX = Liquid.CSMat(2, [0, 1, 1.0, 0.0; 1, 0, 1.0, 0.0])
+        let PauliY = Liquid.CSMat(2, [0, 1, 0.0, -1.0; 1, 0, 0.0, 1.0])
+        let PauliZ = Liquid.CSMat(2, [0, 0, 1.0, 0.0; 1, 1, -1.0, 0.0])
+        let Identity = Liquid.CSMat(2, [0, 0, 1.0, 0.0; 1, 1, 1.0, 0.0])
+        let IdentityN n = Liquid.CSMat(n, [ for i in 0..n-1 -> i, i, 1.0, 0.0 ])
+
+        // kronecker product for a list of matrices
+        let Outer (list : Liquid.CSMat list) =
+            List.fold (fun (matl : Liquid.CSMat) (matr : Liquid.CSMat) -> matl.Kron matr) list.Head list.Tail
+
+        // overload tensor power multiplication
+        type OperatorExtension = OperatorExtension with
+            static member (?*) (OperatorExtension, (a : Liquid.CSMat, n : int)) =
+                match n with
+                | 0 -> IdentityN a.Length
+                | _ -> Outer [ for i in 1..n -> a ]
+            static member inline (?*) (OperatorExtension, (a: 'a, b: 'b)) =
+                a * b : 'a
+
+        let inline (*) a b = (OperatorExtension ?* (a, b))
+
+            
+
+    open Matrices
 
     let Projector (states : Data.DataT list) (theta : float) (qs : Liquid.Qubits) =
         let state2pos (signature : Data.DataT) = 
@@ -24,6 +50,7 @@ module Gates =
             // create new liquid gate
             new Liquid.Gate(
                 Name        = "projector",
+                Draw        = (join "" [ for i in 0..qs.Length-1 -> sprintf "\\cwx[#%d]\\go[#%d]\\gate{Train}" i i ]),
                 Help        = sprintf "custom projector onto %A" states,
                 Mat         = Liquid.CSMat(size, diagonal)
             )
@@ -31,10 +58,19 @@ module Gates =
         (gate theta).Run qs
 
     let X (theta : float) (qs : Liquid.Qubits) =
-        let op = (Liquid.HamiltonianGates.Rpauli theta Liquid.Operations.X)
-        op >< qs
+        let gate (theta : float) =
+            new Liquid.Gate(
+                Name        = "multi X",
+                Draw        = (join "" [ for i in 0..qs.Length-1 -> sprintf "\\qwx[#%d]\\go[#%d]\\gate{X}" i i ]),
+                Mat         = Matrices.PauliX * qs.Length
+            )
+
+        (gate theta).Run qs
+
+
 
     let CX (theta : float) (qs : Liquid.Qubits) =
+        (PauliX * 0).DumpDense()
         Liquid.Operations.Cgate (X theta) qs
 
 
@@ -48,12 +84,11 @@ module ControlledTrainer =
 
     let Train (graph : Hypergraph) (data : Dataset) =
         let controlled_graph = graph.ControlGraph
-        dump controlled_graph
         let projector = Gates.Projector (data.No @ (Flip /@ data.Yes))
         let terms =
             [
                 // projector on training data
-                Liquid.SpinTerm(0, projector, controlled_graph.Outputs, 1.0)
+                Liquid.SpinTerm(1, projector, controlled_graph.Outputs, 1.0)
             ] @ [
                 // training interactions
                 for interaction in controlled_graph.Interactions do
