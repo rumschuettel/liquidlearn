@@ -54,7 +54,8 @@ type Hypergraph(edges : vertexT list list) = class
     // prints out the hypergraph structure
     override this.ToString() = sprintf "vertices:\n%A\nedges:\n%A" vertices edges
 
-    // number of vertices
+    // vertices
+    member this.Vertices = this.whichQubit /@ vertices
     member this.Size = vertices.Length
 
     // get a list of interactions of the form [[a0; ... an]; ... [x0; ... xm]]

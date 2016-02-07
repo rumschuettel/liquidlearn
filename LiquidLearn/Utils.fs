@@ -17,10 +17,13 @@ module Data =
     type BitT = Zero=0 | One=1
     type DataT = BitT list
 
-    type Dataset = {
-        Yes : DataT list
-        No  : DataT list
-    }
+    type Dataset =
+        {
+            Yes : DataT list
+            No  : DataT list
+        }
+        member this.ValuatedList (weight : float) =
+            [ for y in this.Yes -> (weight, y) ] @ [ for n in this.No -> (-weight, n)]
 
     // parse from string or others
     let Parse (str:string) =
@@ -29,7 +32,7 @@ module Data =
             elif c = '1' then yield BitT.One
             elif c = ' ' then ()
             else failwith "invalid character in data string"
-        ]
+        ] |> List.rev
 
     // flip bits
     let Flip (data:DataT) =
