@@ -6,7 +6,7 @@ open Utils
 type vertexT =
     | V of string
     | O of string
-    | C of string
+    | C of string * string
 
 let inline (---) a b = 
     unbox<vertexT> /@ (
@@ -42,14 +42,14 @@ type Hypergraph(edges : vertexT list list) = class
         seq {
             for v in vertices do
                 match v with
-                | C x -> yield C x
+                | C (x, y) -> yield C (x, y)
                 | _ -> ()
         } |> Seq.toList
     // check that all visible vertices are contained in vertex list
     do
         if (Set.difference (Set.ofList output) (Set.ofList vertices)).Count > 0 then failwith "some disconnected surface vertices"
 
-    member this.whichQubit (name:vertexT) = List.findIndex (fun v -> v = name) vertices
+    member this.whichQubit (name : vertexT) = List.findIndex (fun v -> v = name) vertices
 
     // prints out the hypergraph structure
     override this.ToString() = sprintf "vertices:\n%A\nedges:\n%A" vertices edges
@@ -59,16 +59,21 @@ type Hypergraph(edges : vertexT list list) = class
     member this.Size = vertices.Length
 
     // get a list of interactions of the form [[a0; ... an]; ... [x0; ... xm]]
-    member this.Interactions = (fun e-> this.whichQubit /@ e) /@ edges
+    member this.Interactions = (fun e -> this.whichQubit /@ e) /@ edges
 
     // get a list of output or control qubits in the form [q0; q1; ... ; qn]
     member this.Outputs = this.whichQubit /@ output
     member this.Controls = this.whichQubit /@ control
 
-    // return graph where every hyperedge is extended by a control vertex
-    member this.ControlGraph =
+    // return graph where either every or only some hyperedges are extended by a control vertex
+    member this.ControlGraph (f : vertexT list -> string option) =
         new Hypergraph(
-            (fun e -> C (randomStr 5) --- e) /@ edges
+            (
+                fun edge ->
+                    match f edge with
+                    | Some id -> C (id, randomStr 5) --- edge
+                    | None -> edge
+            ) /@ edges
         )
 
 

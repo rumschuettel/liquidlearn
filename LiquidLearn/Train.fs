@@ -84,6 +84,13 @@ module Interactions =
     let CX (theta : float) (qs : Liquid.Qubits) =
         Liquid.Operations.Cgate (X theta) qs
 
+    // some interaction sets
+    module Sets =
+        // creates 
+        let Full (edge : Graph.vertexT) =
+            
+            ()
+
 
 // controlled gate trainer
 module ControlledTrainer =
@@ -94,7 +101,7 @@ module ControlledTrainer =
         ket.Probs !!(ket.Qubits, qubits)
 
     let Train (graph : Hypergraph) (data : Dataset) =
-        let controlled_graph = graph.ControlGraph
+        let controlled_graph = graph.ControlGraph ( fun edge -> Some "jup" )
         let projector = Interactions.Projector (data.ValuatedList 1.0)
         let terms =
             [
@@ -108,6 +115,12 @@ module ControlledTrainer =
             ]
         let spin = Liquid.Spin(terms, controlled_graph.Size)
 
+        try
+            (GeneratedCode.Matrices.PauliProduct "221" 1.0).DumpDense Liquid.Util.showInd
+        with
+        | Failure(msg) -> dump msg
+
+
         Liquid.Spin.Test(
             tag = "training",
             repeats = 20,
@@ -118,7 +131,7 @@ module ControlledTrainer =
             ],
             res = 5,
             spin = spin,
-            runonce = false,
+            runonce = true,
             decohereModel = []
         )
         

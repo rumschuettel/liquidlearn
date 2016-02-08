@@ -55,6 +55,7 @@
     <Compile Include="AssemblyInfo.fs" />
     <Compile Include="Utils.fs" />
     <Compile Include="Graph.fs" />
+    <Compile Include="PauliGates.fs" />
     <Compile Include="Train.fs" />
     <Compile Include="Program.fs" />
     <None Include="App.config" />
