@@ -1,13 +1,14 @@
 // LiquidLearn (c) 2016 Johannes Bausch
-// Auto-Generated File with gates.nb on Mon 8 Feb 2016 12:58:11
+// Auto-Generated File with gates.nb on Sat 20 Feb 2016 16:12:59
 namespace LiquidLearn.GeneratedCode
 
-module Matrices =
+module PauliProductMatrices =
     open Microsoft.Research.Liquid
-    let PauliProduct (id : string) t =
+    let Get (id : string) t =
         // local mapping
         let Cos = System.Math.Cos
         let Sin = System.Math.Sin
+        let Power(x, n) = x ** (float n)
             
         match id with
         | "00" -> CSMat(4, [0, 0, Cos(t), Sin(t); 1, 1, Cos(t), Sin(t); 2, 2, Cos(t), Sin(t); 3, 3, Cos(t), Sin(t)])

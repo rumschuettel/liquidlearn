@@ -3,7 +3,20 @@ module LiquidLearn.Utils
 
 // check if list contains a
 let contains a list = List.exists (fun element -> element = a) list
+
+// cartesian product of a sequence of sequences
+let rec cartesian (lists : 'a list list) = 
+    let f0 a = function
+        | [] -> [[a]]
+        | lists -> List.map (fun list -> a::list) lists
     
+    match lists with
+    | [] -> []
+    | head::tail -> List.collect (fun a -> f0 a (cartesian tail)) head
+
+let tuples (list: 'a list) (n : int) =
+    cartesian [ for i in 1..n -> list ]
+
 // shortcut aliases
 let join = String.concat
 let inline (/@) f list = List.map f list

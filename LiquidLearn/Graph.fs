@@ -3,18 +3,27 @@ module LiquidLearn.Graph
 
 open Utils
 
-type vertexT =
+type VertexT =
     | V of string
     | O of string
     | C of string * string
 
+type EdgeT = VertexT list 
+let NormalOrderEdge edge =
+    Seq.sortBy (fun vertex ->
+        match vertex with
+        | C(a, b) -> 0
+        | O(a) -> 2
+        | _ -> 1
+    ) edge |> Seq.toList
+
 let inline (---) a b = 
-    unbox<vertexT> /@ (
+    unbox<VertexT> /@ (
         match box a, box b with
-        | (:? list<vertexT> as a), (:? list<vertexT> as b) -> [a; b] |> List.concat
-        | (:? vertexT as a), (:? list<vertexT> as b) -> [[a]; b] |> List.concat
-        | (:? list<vertexT> as a), (:? vertexT as b) -> [a; [b]] |> List.concat
-        | (:? vertexT as a), (:? vertexT as b) -> [a; b]
+        | (:? list<VertexT> as a), (:? list<VertexT> as b) -> [a; b] |> List.concat
+        | (:? VertexT as a), (:? list<VertexT> as b) -> [[a]; b] |> List.concat
+        | (:? list<VertexT> as a), (:? VertexT as b) -> [a; [b]] |> List.concat
+        | (:? VertexT as a), (:? VertexT as b) -> [a; b]
         | _ -> failwith "not a valid hyperedge type"
     )
 
@@ -28,33 +37,35 @@ let randomStr =
         new System.String(randomChars)
 
 
-type Hypergraph(edges : vertexT list list) = class
-    // extract unique vertices, output and control
+type Hypergraph(edges : EdgeT list) = class
+    // put edges in correct order, extract unique vertices, output and control
+    let edges = NormalOrderEdge /@ edges
     let vertices = edges |> List.concat |> Set.ofList |> Set.toList
     let output =
-        seq {
+        [
             for v in vertices do
                 match v with
                 | O x -> yield O x
                 | _ -> ()
-        } |> Seq.toList
+        ]
     let control =
-        seq {
+        [
             for v in vertices do
                 match v with
                 | C (x, y) -> yield C (x, y)
                 | _ -> ()
-        } |> Seq.toList
-    // check that all visible vertices are contained in vertex list
+        ]
+    // check that all output vertices are contained in vertex list
     do
-        if (Set.difference (Set.ofList output) (Set.ofList vertices)).Count > 0 then failwith "some disconnected surface vertices"
+        if (Set.difference (Set.ofList output) (Set.ofList vertices)).Count > 0 then failwith "some disconnected output vertices"
 
-    member this.whichQubit (name : vertexT) = List.findIndex (fun v -> v = name) vertices
+    member this.whichQubit (name : VertexT) = List.findIndex (fun v -> v = name) vertices
 
     // prints out the hypergraph structure
     override this.ToString() = sprintf "vertices:\n%A\nedges:\n%A" vertices edges
 
-    // vertices
+    // vertices and edges
+    member this.Edges = edges
     member this.Vertices = this.whichQubit /@ vertices
     member this.Size = vertices.Length
 
@@ -65,16 +76,14 @@ type Hypergraph(edges : vertexT list list) = class
     member this.Outputs = this.whichQubit /@ output
     member this.Controls = this.whichQubit /@ control
 
-    // return graph where either every or only some hyperedges are extended by a control vertex
-    member this.ControlGraph (f : vertexT list -> string option) =
-        new Hypergraph(
-            (
-                fun edge ->
-                    match f edge with
-                    | Some id -> C (id, randomStr 5) --- edge
-                    | None -> edge
-            ) /@ edges
-        )
+    // return graph where either every or only some hyperedges are extended by one or more control vertices
+    member this.ControlGraph (f : EdgeT -> string list) =
+        new Hypergraph
+            ([
+                for e in edges do
+                    for s in (f e) do
+                        yield C(s, randomStr 5) --- e            
+            ])
 
 
 end

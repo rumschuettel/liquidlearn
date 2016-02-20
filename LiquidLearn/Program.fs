@@ -14,28 +14,13 @@ module LearnApp =
 
     [<LQD>]
     let Learn() =
-        (*let edges = [
-            O"i0" --- V"h0" --- O"i1"
-            O"i1" --- V"h1" --- O"i2"
-
-            V"h0" --- O"i1" --- V"h1"
-
-            V"h0" --- O"o" --- V"h1"
-        ]
-        let graph = new Hypergraph(edges)
-        ControlledTrainer.Train graph {
-            Yes = (Parse /@ ["000"; "010"])
-            No  = (Parse /@ ["111"; "110"; "011"])
-        }*)
-
         let edges = [ O"1" --- O"2" ]
         let graph = new Hypergraph(edges)
         ControlledTrainer.Train graph {
             Yes = (Parse /@ ["01"])
             No  = (Parse /@ ["11"; "00"])
-        }
+        } Interactions.Sets.FullProjectors
         ()
-
 
         
 
