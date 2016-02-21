@@ -19,7 +19,7 @@ let tuples (list: 'a list) (n : int) =
 
 // shortcut aliases
 let join = String.concat
-let inline (/@) f list = List.map f list
+let inline (/@) f list = Seq.map f list |> Seq.toList
 
 // dump function
 let dump sth = printfn "%A" sth
@@ -37,6 +37,8 @@ module Data =
         }
         member this.ValuatedList (weight : float) =
             [ for y in this.Yes -> (weight, y) ] @ [ for n in this.No -> (-weight, n)]
+        member this.YesInstances = { Yes = this.Yes; No = [] }
+        member this.NoInstances = { Yes = []; No = this.No }
 
     // parse from string or others
     let Parse (str:string) =

@@ -92,7 +92,7 @@ module Interactions =
         // all Pauli interactions.
         let FullPauli (edge : Graph.EdgeT) : SetT =
             // create names list 00, 01, 02, 03, 10, ..., 23, 30, 31, 32, 33
-            let names n = [ for id in tuples ['1'; '2'; '3'] n -> string (new System.String(Seq.toArray id)) ]
+            let names n = [ for id in tuples ['0'; '1'; '2'; '3'] n -> string (new System.String(Seq.toArray id)) ]
             let namesWithoutControl = names (edge.Length - 1)
 
             // try to find a vertex C("001", ...) and return control identifier
@@ -127,7 +127,7 @@ module ControlledTrainer =
     open Interactions
 
     let MeasurementStatistics (ket : Liquid.Ket) (qubits : int list) =
-        ket.Probs !!(ket.Qubits, qubits)
+        ket.Probs !!(ket.Qubits, qubits) |> Array.toList
 
     let Train (graph : Hypergraph) (data : Dataset) (interactions : EdgeT -> Interactions.Sets.SetT) =
         // create controlled version of graph
@@ -142,30 +142,54 @@ module ControlledTrainer =
         let controlled_interactions = [
             for edge in controlled_graph.Edges do
                 match interactions edge with
-                | Sets.SetT.Interaction (name, h) -> yield Liquid.SpinTerm(1, Controlled (MatrixInteraction name h), controlled_graph.whichQubit /@ edge, -1.0)
+                | Sets.SetT.Interaction (name, h) -> yield Liquid.SpinTerm(1, Controlled (MatrixInteraction name h), controlled_graph.whichQubit /@ edge, 1.0)
                 | _ -> ()
         ]
         dump controlled_interactions
 
-        // projector on training data
-        let projector = Liquid.SpinTerm(1, Interactions.Projector (data.ValuatedList 1.0), controlled_graph.Outputs, 1.0)
+        // run training once for YES and once for NO-instances
+        let res =
+            ( fun (tag, data : Dataset, weight) ->
+                // projector on training data
+                let projector = Liquid.SpinTerm(1, Interactions.Projector (data.ValuatedList weight), controlled_graph.Outputs, 1.0)
 
-        // create spin model and train
-        let spin = Liquid.Spin(projector :: controlled_interactions, controlled_graph.Size)
-        Liquid.Spin.Test(
-            tag = "training",
-            repeats = 20,
-            trotter = 10,
-            schedule = [
-                0,     [|1.0; 0.0; 0.0|];
-                25,    [|1.0; 1.0; 0.0|]
-                100,   [|0.0; 1.0; 1.0|]
-            ],
-            res = 5,
-            spin = spin,
-            runonce = true,
-            decohereModel = []
-        )
+                // create spin model and train
+                let spin = Liquid.Spin(projector :: controlled_interactions, controlled_graph.Size)
+                Liquid.Spin.Test(
+                    tag = "train " + tag,
+                    repeats = 20,
+                    trotter = 10,
+                    schedule = [
+                        0,     [|1.0; 0.0|];
+                        100,   [|0.0; 1.0|]
+                    ],
+                    res = 5,
+                    spin = spin,
+                    runonce = true,
+                    decohereModel = []
+                )
+
+                // extract trained control probabilities
+                //dump !!(spin.Ket.Qubits, controlled_graph.Controls)
+                [ for control in controlled_graph.Controls -> MeasurementStatistics spin.Ket [control] ]
+
+            ) /@ [("YES", data.YesInstances, 1.0); ("NO", data.NoInstances, -1.0)]
+
+        // combine training results: extract control weights
+        let yesWeights = (fun (prob : float list) -> prob.[0]) /@ res.[0]
+        let noWeights = (fun (prob : float list) -> prob.[1]) /@ res.[1]
+        let weights = 
+            [ for i in 0..yesWeights.Length-1 -> yesWeights.[i] + noWeights.[i] ]
+            |>
+            // normalize to -1 to 1
+            (fun weights ->
+                let min, max = List.min weights, List.max weights
+                [ for weight in weights -> (weight - min) / (max - min) * 2. - 1. ]
+            )
+        
+        dump (yesWeights, noWeights, weights)
+
+
         
         // extract trained controls
         //dump !!(spin.Ket.Qubits, controlled_graph.Controls)
