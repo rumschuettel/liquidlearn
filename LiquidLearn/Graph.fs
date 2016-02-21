@@ -9,7 +9,7 @@ type VertexT =
     | C of string * string
 
 type EdgeT = VertexT list 
-let NormalOrderEdge edge =
+let NormalOrderEdge edge = // put the control vertex to however controlled interactions are created
     Seq.sortBy (fun vertex ->
         match vertex with
         | C(a, b) -> 0

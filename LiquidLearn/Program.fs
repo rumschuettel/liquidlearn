@@ -19,7 +19,7 @@ module LearnApp =
         ControlledTrainer.Train graph {
             Yes = (Parse /@ ["01"])
             No  = (Parse /@ ["11"; "00"])
-        } Interactions.Sets.FullProjectors
+        } Interactions.Sets.FullPauli
         ()
 
         

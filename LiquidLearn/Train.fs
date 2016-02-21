@@ -142,7 +142,7 @@ module ControlledTrainer =
         let controlled_interactions = [
             for edge in controlled_graph.Edges do
                 match interactions edge with
-                | Sets.SetT.Interaction (name, h) -> yield Liquid.SpinTerm(1, Controlled (MatrixInteraction name h), controlled_graph.whichQubit /@ edge, 1.0)
+                | Sets.SetT.Interaction (name, h) -> yield Liquid.SpinTerm(2, Controlled (MatrixInteraction name h), controlled_graph.whichQubit /@ edge, 1.0)
                 | _ -> ()
         ]
         dump controlled_interactions
@@ -150,18 +150,19 @@ module ControlledTrainer =
         // run training once for YES and once for NO-instances
         let res =
             ( fun (tag, data : Dataset, weight) ->
-                // projector on training data
-                let projector = Liquid.SpinTerm(1, Interactions.Projector (data.ValuatedList weight), controlled_graph.Outputs, 1.0)
+                // projector on training data. Interaction strength scaled to be dominating term
+                let projector = Liquid.SpinTerm(1, Interactions.Projector (data.ValuatedList weight), controlled_graph.Outputs, 10. * (float controlled_graph.Size))
 
                 // create spin model and train
-                let spin = Liquid.Spin(projector :: controlled_interactions, controlled_graph.Size)
+                let spin = Liquid.Spin(projector :: controlled_interactions, controlled_graph.Size, Liquid.RunMode.Trotter1X)
                 Liquid.Spin.Test(
                     tag = "train " + tag,
-                    repeats = 20,
-                    trotter = 10,
+                    repeats = 1,
+                    trotter = 4,
                     schedule = [
-                        0,     [|1.0; 0.0|];
-                        100,   [|0.0; 1.0|]
+                        0,     [|1.0; 0.0; 0.0|];
+                        25,    [|1.0; 1.0; 0.0|];
+                        100,   [|0.0; 1.0; 1.0|]
                     ],
                     res = 5,
                     spin = spin,
@@ -184,7 +185,12 @@ module ControlledTrainer =
             // normalize to -1 to 1
             (fun weights ->
                 let min, max = List.min weights, List.max weights
-                [ for weight in weights -> (weight - min) / (max - min) * 2. - 1. ]
+                [ for weight in weights ->
+                    if max <> min then
+                        (weight - min) / (max - min) * 2. - 1.
+                    else
+                        0.
+                ]
             )
         
         dump (yesWeights, noWeights, weights)
