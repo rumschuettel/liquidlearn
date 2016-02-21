@@ -57,6 +57,7 @@
     <Compile Include="Graph.fs" />
     <Compile Include="ProjectorGates.fs" />
     <Compile Include="PauliGates.fs" />
+    <Compile Include="Interactions.fs" />
     <Compile Include="Train.fs" />
     <Compile Include="Program.fs" />
     <None Include="App.config" />

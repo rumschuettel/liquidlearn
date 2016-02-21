@@ -3,12 +3,18 @@ module LiquidLearn.Graph
 
 open Utils
 
+// recursive vertex type
 type VertexT =
     | V of string
     | O of string
-    | C of string * string
+    | C of string * EdgeT // store the edge the control is controlling for convenience
+    with
+    member this.ControlledEdge =
+        match this with
+        | C(str, edge) -> edge
+        | _ -> failwith "not a control vertex"
+and EdgeT = VertexT list 
 
-type EdgeT = VertexT list 
 let NormalOrderEdge edge = // put the control vertex to however controlled interactions are created
     Seq.sortBy (fun vertex ->
         match vertex with
@@ -74,7 +80,7 @@ type Hypergraph(edges : EdgeT list) = class
 
     // get a list of output or control qubits in the form [q0; q1; ... ; qn]
     member this.Outputs = this.whichQubit /@ output
-    member this.Controls = this.whichQubit /@ control
+    member this.Controls = control
 
     // return graph where either every or only some hyperedges are extended by one or more control vertices
     member this.ControlGraph (f : EdgeT -> string list) =
@@ -82,7 +88,7 @@ type Hypergraph(edges : EdgeT list) = class
             ([
                 for e in edges do
                     for s in (f e) do
-                        yield C(s, randomStr 5) --- e            
+                        yield C(s, e) --- e            
             ])
 
 

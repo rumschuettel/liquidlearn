@@ -36,7 +36,7 @@ module Data =
             No  : DataT list
         }
         member this.ValuatedList (weight : float) =
-            [ for y in this.Yes -> (weight, y) ] @ [ for n in this.No -> (-weight, n)]
+            [ for y in this.Yes -> (-weight, y) ] @ [ for n in this.No -> (weight, n)]
         member this.YesInstances = { Yes = this.Yes; No = [] }
         member this.NoInstances = { Yes = []; No = this.No }
 

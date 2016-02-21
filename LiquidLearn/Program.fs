@@ -9,17 +9,22 @@ module LearnApp =
     open LiquidLearn.Utils
     open LiquidLearn.Utils.Data
     open LiquidLearn.Train
+    open LiquidLearn.Interactions
+
     open Util
     open System
 
     [<LQD>]
     let Learn() =
-        let edges = [ O"1" --- O"2" ]
-        let graph = new Hypergraph(edges)
-        ControlledTrainer.Train graph {
+        let data = {
             Yes = (Parse /@ ["01"])
             No  = (Parse /@ ["11"; "00"])
-        } Interactions.Sets.FullPauli
+        }
+        let edges = [ O"1" --- V"hidden";
+                      V"hidden" --- O"2" ]
+        let graph = new Hypergraph(edges)
+        let model = (new SimpleControlledTrainer(graph, Sets.FullProjectors)).Train data
+        model.Test data
         ()
 
         
