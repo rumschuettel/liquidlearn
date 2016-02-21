@@ -18,8 +18,7 @@ and EdgeT = VertexT list
 let NormalOrderEdge edge = // put the control vertex to however controlled interactions are created
     Seq.sortBy (fun vertex ->
         match vertex with
-        | C(a, b) -> 0
-        | O(a) -> 2
+        | C _ -> 0
         | _ -> 1
     ) edge |> Seq.toList
 

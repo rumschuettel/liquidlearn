@@ -32,7 +32,6 @@ type SimpleControlledTrainer (graph : Graph.Hypergraph, interactions : Graph.Edg
             | Interactions.Sets.SetT.Interaction (name, h) -> yield Liquid.SpinTerm(2, Interactions.Controlled (Interactions.MatrixInteraction name h), controlled_graph.whichQubit /@ edge, 1.0)
             | _ -> ()
     ]
-    do dump controlled_interactions
 
     let mutable parameters = None
     member this.Train (data : Dataset) =
@@ -46,14 +45,14 @@ type SimpleControlledTrainer (graph : Graph.Hypergraph, interactions : Graph.Edg
                 let spin = Liquid.Spin(projector :: controlled_interactions, controlled_graph.Size, Liquid.RunMode.Trotter1X)
                 Liquid.Spin.Test(
                     tag = "train " + tag,
-                    repeats = 1,
-                    trotter = 4,
+                    repeats = 20,
+                    trotter = 20,
                     schedule = [
-                        0,     [|1.0; 0.0; 0.0|];
-                        25,    [|1.0; 1.0; 0.0|];
-                        100,   [|0.0; 1.0; 1.0|]
+                        0,     [|1.00; 0.00; 0.00|];
+                        25,   [|1.00; 0.25; 0.00|];
+                        100,  [|0.00; 1.00; 1.00|]
                     ],
-                    res = 5,
+                    res = 10,
                     spin = spin,
                     runonce = true,
                     decohereModel = []
@@ -82,6 +81,7 @@ type SimpleControlledTrainer (graph : Graph.Hypergraph, interactions : Graph.Edg
             )
         
         parameters <- Some((List.zip controlled_graph.Controls weights) |> Map.ofList)
+        dump parameters
         
         this
 
@@ -89,7 +89,6 @@ type SimpleControlledTrainer (graph : Graph.Hypergraph, interactions : Graph.Edg
         match parameters with
         | None -> failwith "model not trained"
         | Some parameters ->
-            dump parameters
             // build interactions from previously trained model
             let interactions = [
                 for edge in graph.Edges do
@@ -107,7 +106,6 @@ type SimpleControlledTrainer (graph : Graph.Hypergraph, interactions : Graph.Edg
                                 | _ -> failwith "interaction function should return a valid interaction for given name"
                             )
                             let strength = parameters.[control]
-                            // negative weight for YES-instances
                             Liquid.SpinTerm(1, Interactions.MatrixInteraction name interaction, graph.whichQubit /@ edge, -strength)
                       ]
                   | _ -> ()
@@ -118,11 +116,11 @@ type SimpleControlledTrainer (graph : Graph.Hypergraph, interactions : Graph.Edg
             let spin = Liquid.Spin(interactions, graph.Size, Liquid.RunMode.Trotter1X)
             Liquid.Spin.Test(
                 tag = "test",
-                repeats = 1,
+                repeats = 10,
                 trotter = 4,
                 schedule = [
-                    0,     [|1.0; 0.0|];
-                    100,   [|0.0; 1.0|]
+                    0,    [|1.0; 0.0|];
+                    100,  [|0.0; 1.0|]
                 ],
                 res = 5,
                 spin = spin,
@@ -142,6 +140,7 @@ type SimpleControlledTrainer (graph : Graph.Hypergraph, interactions : Graph.Edg
             state.Dump Liquid.Util.showInd
 
             let updateStateData (data : DataT) =
+                let data = List.rev data // TODO check order of data and why we have to flip it around here
                 [ for i in 0..outputs.Length-1 -> i ] |> List.map (fun i ->
                     match data.[i] with
                     | BitT.Zero _ -> qubits.[outputs.[i]].StateSet(Liquid.Zero)
