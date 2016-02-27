@@ -22,7 +22,8 @@ module LearnApp =
         }
         let edges = [ O"1" --- O"2";]
         let graph = new Hypergraph(edges)
-        let model = (new SimpleControlledTrainer(graph, Sets.FullProjectors)).Train data
+        let model = new SimpleControlledTrainer(graph, Sets.Projectors())
+        let trained = model.Train data
         
         let results = model.Test {
             Yes = (FromString /@ ["000"; "10";])

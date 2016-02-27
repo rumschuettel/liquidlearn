@@ -6,6 +6,26 @@ open Liquid.Operations // for >< and !! operator
 
 open Utils
 
+type Liquid.CSMat with
+    // direct sum
+    member this.Plus (other : Liquid.CSMat) =
+        let totalSize = this.Length + other.Length
+        let thisEntries = [
+            for i in 0..this.Length-1 do
+                for j in 0..this.Length-1 do
+                    let entry = this.Item (i, j)
+                    yield (i, j, entry.r, entry.i)
+        ]
+        let otherEntries = [
+            for i in 0..other.Length-1 do
+                for j in 0..other.Length-1 do
+                    let entry = other.Item (i, j)
+                    yield (i + this.Length, j + this.Length, entry.r, entry.i)
+        ]
+        let res = Liquid.CMat(totalSize, List.concat [thisEntries; otherEntries]) |> Liquid.CSMat
+        res
+
+
 
 // create sets of gates used in the training algorithms
 (*
@@ -17,26 +37,13 @@ The trotter number seems to be a parameter that controls how fine-grained the su
 exp(i (A + B) t) = (exp(i A t/T)exp(i B t/T)^T for some trotter number T.
 Hence the parameter T and theta has to make the coupling "smaller" in the sense that it applies the coupling multiple times.
 *)
-type InteractionT = (float -> Liquid.Qubits -> unit)
-
 module Matrices =
     // some standard matrices
     let PauliX = Liquid.CSMat(2, [0, 1, 1.0, 0.0; 1, 0, 1.0, 0.0])
     let PauliY = Liquid.CSMat(2, [0, 1, 0.0, -1.0; 1, 0, 0.0, 1.0])
     let PauliZ = Liquid.CSMat(2, [0, 0, 1.0, 0.0; 1, 1, -1.0, 0.0])
     let Identity = Liquid.CSMat(2, [0, 0, 1.0, 0.0; 1, 1, 1.0, 0.0])
-    let IdentityN n = Liquid.CSMat(n, [ for i in 0..n-1 -> i, i, 1.0, 0.0 ])
-
-    // kronecker product for a list of matrices, or numbers, overloaded
-    type OuterT = OuterT with
-        static member ($) (OuterT, list : Liquid.CSMat list) =
-            List.fold (fun (matl : Liquid.CSMat) (matr : Liquid.CSMat) -> matl.Kron matr) list.Head list.Tail
-        static member ($) (OuterT, arg : Liquid.CSMat * int) =
-            let matrix, exponent = arg
-            OuterT $ [ for i in 1..exponent -> matrix ]
-
-    let inline Outer arg : Liquid.CSMat = OuterT $ arg
-            
+    let IdentityN n = Liquid.CSMat(n, [ for i in 0..n-1 -> i, i, 1.0, 0.0 ])            
 
 open Matrices
 open System
@@ -76,44 +83,52 @@ let MatrixInteraction name (matrix : float -> Liquid.CSMat) theta (qs : Liquid.Q
     )).Run qs
 
 
-let Controlled (interaction: InteractionT) theta qs =
-    Liquid.Operations.CgateNC (interaction theta) qs
+// like CgateNC, but for a qudit control; we assume all matrices are the same size
+let ControlledInteraction (matrices : (float -> Liquid.CSMat) list) theta (qs : Liquid.Qubits) =
+    let identity = IdentityN (matrices.[0] 0.0).Length
+    let matrices = (fun matrix -> matrix theta) /@ matrices
+    let controlQubitCount = System.Math.Log(float matrices.Length, 2.0) |> ceil
+    let padMatricesCount = (2.0**controlQubitCount) - (float matrices.Length) |> round |> int
+    let padMatrices = [ for i in 0..padMatricesCount-1 -> identity ]
+
+    // direct sum all matrices to 1 + m1+m2+...+mn + 1+...+1
+    let matrixSum = (matrices @ padMatrices) |> List.fold (fun (bigmatrix : Liquid.CSMat) matrix -> bigmatrix.Plus matrix) identity
+
+    (new Liquid.Gate(
+        Name = "foo",
+        Mat = matrixSum
+    )).Run qs
 
 // some interaction sets
 module Sets =
-    type SetT = 
-        | Names of string list
-        | Interaction of string * (float -> Liquid.CSMat)
- 
-    // If an edge without matching control is given, a complete set of interaction names is returned.
-    // If an edge with control is given, a matching interaction is returned.
+    type InteractionT = (float -> Liquid.Qubits -> unit)
 
-    // all Pauli interactions.
-    let FullPauli (edge : Graph.EdgeT) : SetT =
-        // create names list 00, 01, 02, 03, 10, ..., 23, 30, 31, 32, 33
-        let names n = [ for id in tuples ['0'; '1'; '3'] n -> string (new System.String(Seq.toArray id)) ]
-        let namesWithoutControl = names (edge.Length - 1)
+    // Interaction base class
+    [<AbstractClass>]
+    type InteractionFactory() =
+        abstract member Names : int -> string list
+        abstract member Matrix : string -> (float -> Liquid.CSMat)
 
-        // try to find a vertex C("001", ...) and return control identifier
-        match (List.tryPick (fun vertex ->
-            match vertex with
-            | Graph.VertexT.C(name, _) when contains name namesWithoutControl -> Some name
-            | _ -> None
-        ) edge) with
-        | Some name -> SetT.Interaction (name, (GeneratedCode.PauliProductMatrices.Get name))
-        | _ -> SetT.Names (names edge.Length)
+        member this.ListPossibleInteractions (edge : Graph.EdgeT) =
+            this.Names edge.Size
 
-    // all Projector interactions
-    let FullProjectors (edge : Graph.EdgeT) : SetT =
-        // create names list 00, 01, 10, 11
-        let names n = [ for id in tuples ['0'; '1'] n -> string (new System.String(Seq.toArray id)) ]
-        let namesWithoutControl = names (edge.Length - 1)
+        member this.Interaction name =
+            MatrixInteraction name (this.Matrix name)
 
-        // try to find a vertex C("01", ...) and return control identifier
-        match (List.tryPick (fun vertex ->
-            match vertex with
-            | Graph.VertexT.C(name, _) when contains name namesWithoutControl -> Some name
-            | _ -> None
-        ) edge) with
-        | Some name -> SetT.Interaction (name, (GeneratedCode.Rank1ProjectionMatrices.Get name))
-        | _ -> SetT.Names (names edge.Length)
+        member this.ControlledInteraction (edge : Graph.EdgeT) =
+            let matrices = [ for name in edge.GetControl.Unwrap.interactions -> this.Matrix name ]
+            ControlledInteraction matrices
+
+    // Pauli matrix products
+    type Paulis() =
+        inherit InteractionFactory()
+
+        override this.Names n = [ for id in tuples ['0'; '1'; '2'; '3'] n -> string (new System.String(Seq.toArray id)) ]
+        override this.Matrix id = GeneratedCode.PauliProductMatrices.Get id
+
+    // Projectors
+    type Projectors() =
+        inherit InteractionFactory()
+
+        override this.Names n = [ for id in tuples ['0'; '1'] n -> string (new System.String(Seq.toArray id)) ]
+        override this.Matrix id = GeneratedCode.Rank1ProjectionMatrices.Get id

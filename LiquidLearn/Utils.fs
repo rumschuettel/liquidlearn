@@ -19,10 +19,20 @@ let tuples (list: 'a list) (n : int) =
 
 // shortcut aliases
 let join = String.concat
-let inline (/@) f list = Seq.map f list |> Seq.toList
+let inline (/@) f list = [ for element in list -> f element ]
 
 // dump function
 let dump sth = printfn "%A" sth
+
+// random string
+let randomString = 
+    let chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWUXYZ0123456789"
+    let charsLen = chars.Length
+    let random = System.Random()
+
+    fun len -> 
+        let randomChars = [|for i in 0..len -> chars.[random.Next(charsLen)]|]
+        new System.String(randomChars)
 
 
 // input and output data specification

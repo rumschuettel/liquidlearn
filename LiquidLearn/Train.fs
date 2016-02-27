@@ -26,24 +26,30 @@ type TestResults = {
     member this.ToFile filename =
         System.IO.File.WriteAllText(filename, string this)
         
+
+
 // simple controlled gate trainer
-type SimpleControlledTrainer (graph : Graph.Hypergraph, interactions : Graph.EdgeT -> Interactions.Sets.SetT, ?trainOnQudits : bool) = class
+type SimpleControlledTrainer (graph : Graph.Hypergraph, interactions : Interactions.Sets.InteractionFactory, ?trainOnQudits : bool) = class
     let trainOnQudits = defaultArg trainOnQudits false
 
     // create controlled version of graph
-    let controlled_graph = graph.ControlGraph ( fun edge ->
-        match interactions edge with
-        | Interactions.Sets.SetT.Names names -> names
-        | _ -> failwith "interactions should be just a list of names at this point"
+    let trainingGraph = graph.AddControls ( fun edge ->
+        [
+            for interaction in interactions.ListPossibleInteractions edge ->
+            {
+                id = randomString 5;
+                interactions = [interaction]
+            }
+        ]
     )
-    do dump controlled_graph
+    do 
+        dump trainingGraph
+        dump [ for e in trainingGraph.Edges -> trainingGraph.WhichQubits e ]
 
     // interactions to train
-    let controlled_interactions = [
-        for edge in controlled_graph.Edges do
-            match interactions edge with
-            | Interactions.Sets.SetT.Interaction (name, h) -> yield Liquid.SpinTerm(2, Interactions.Controlled (Interactions.MatrixInteraction name h), controlled_graph.whichQubit /@ edge, 1.0)
-            | _ -> ()
+    let couplings = [
+        for edge in trainingGraph.Edges do
+            yield Liquid.SpinTerm(2, interactions.ControlledInteraction edge, trainingGraph.WhichQubits edge, 1.0)
     ]
 
     let mutable parameters = None
@@ -52,10 +58,10 @@ type SimpleControlledTrainer (graph : Graph.Hypergraph, interactions : Graph.Edg
         let res =
             ( fun (tag, data : Dataset, weight) ->
                 // projector on training data. Interaction strength scaled to be dominating term
-                let projector = Liquid.SpinTerm(1, Interactions.Projector (data.ValuatedList weight), controlled_graph.Outputs, 10. * (float controlled_graph.Size))
+                let projector = Liquid.SpinTerm(1, Interactions.Projector (data.ValuatedList weight), trainingGraph.WhichQubits trainingGraph.Outputs, 10. * (float trainingGraph.Size))
 
                 // create spin model and train
-                let spin = Liquid.Spin(projector :: controlled_interactions, controlled_graph.Size, Liquid.RunMode.Trotter1X)
+                let spin = Liquid.Spin(projector :: couplings, trainingGraph.Size, Liquid.RunMode.Trotter1X)
                 Liquid.Spin.Test(
                     tag = "train " + tag,
                     repeats = 20,
@@ -70,9 +76,10 @@ type SimpleControlledTrainer (graph : Graph.Hypergraph, interactions : Graph.Edg
                     runonce = true,
                     decohereModel = []
                 )
+                
 
                 // extract trained control probabilities
-                [ for control in controlled_graph.Controls -> MeasurementStatistics spin.Ket [controlled_graph.whichQubit control] ]
+                [ for edge in trainingGraph.Edges -> MeasurementStatistics spin.Ket (trainingGraph.WhichQubits edge.GetControl) ]
 
             ) /@ [("YES", data.YesInstances, -1.0); ("NO", data.NoInstances, 1.0)]
 
@@ -93,7 +100,10 @@ type SimpleControlledTrainer (graph : Graph.Hypergraph, interactions : Graph.Edg
                 ]
             )
         
-        parameters <- Some((List.zip controlled_graph.Controls weights) |> Map.ofList)
+        let controlWeights = List.zip trainingGraph.Edges weights
+        parameters <- Some ((fun (edge : EdgeT, weight) ->
+             edge.StripControl, edge.GetControl.Unwrap.interactions.[0], weight
+        ) /@ controlWeights)
         dump parameters
         
         this
@@ -103,30 +113,13 @@ type SimpleControlledTrainer (graph : Graph.Hypergraph, interactions : Graph.Edg
         | None -> failwith "model not trained"
         | Some parameters ->
             // build interactions from previously trained model
-            let interactions = [
-                for edge in graph.Edges do
-                  match interactions edge with
-                  | Interactions.Sets.SetT.Names names ->
-                      yield! [
-                        for name in names ->
-                            // dummy control vertex
-                            let control = Graph.C(name, edge)
-                            // get interaction for edge
-                            let interaction = (
-                                // interaction function on dummy edge with the right control vertex telling the interaction function which interaction to return
-                                match (interactions (control --- edge)) with
-                                | Interactions.Sets.SetT.Interaction (name, h) -> h
-                                | _ -> failwith "interaction function should return a valid interaction for given name"
-                            )
-                            let strength = parameters.[control]
-                            Liquid.SpinTerm(1, Interactions.MatrixInteraction name interaction, graph.whichQubit /@ edge, -strength)
-                      ]
-                  | _ -> ()
+            let couplings = [
+                for p in parameters ->
+                    let (edge, name, strength) = p
+                    Liquid.SpinTerm(1, interactions.Interaction name, graph.WhichQubits edge, -strength)
             ]
 
-            dump interactions
-
-            let spin = Liquid.Spin(interactions, graph.Size, Liquid.RunMode.Trotter1X)
+            let spin = Liquid.Spin(couplings, graph.Size, Liquid.RunMode.Trotter1X)
             Liquid.Spin.Test(
                 tag = "test",
                 repeats = 20,
@@ -143,7 +136,7 @@ type SimpleControlledTrainer (graph : Graph.Hypergraph, interactions : Graph.Edg
 
             let state = Liquid.Ket(graph.Size)
             let qubits = state.Qubits
-            let outputs = graph.Outputs // list of qubits that act as output qubits
+            let outputs = graph.WhichQubits graph.Outputs // list of qubits that act as output qubits
  
             // set part of state vector that is not output to |0> + |1>, so that we trace out the hidden part
             [ for i in 0..graph.Size-1 -> i ] |> List.map (fun i ->
@@ -177,7 +170,7 @@ type SimpleControlledTrainer (graph : Graph.Hypergraph, interactions : Graph.Edg
 
         
         // extract trained controls
-        //dump !!(spin.Ket.Qubits, controlled_graph.Controls)
-        //let controls = MeasurementStatistics spin.Ket controlled_graph.Controls
-        //dump controls
+        //dump !!(spin.Ket.Qubits, trainingGraph.Controls)
+        //let controls = MeasurementStatistics spin.Ket trainingGraph.Controls
+        //dump controls*)
 end
