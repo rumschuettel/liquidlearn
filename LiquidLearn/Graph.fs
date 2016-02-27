@@ -13,7 +13,10 @@ type VertexT =
         match this with
         | C(str, edge) -> edge
         | _ -> failwith "not a control vertex"
-and EdgeT = VertexT list 
+and EdgeT = VertexT list
+and ControlT =
+    | Qubit of string
+    | Qudit of Data.StateT * string
 
 let NormalOrderEdge edge = // put the control vertex to however controlled interactions are created
     Seq.sortBy (fun vertex ->

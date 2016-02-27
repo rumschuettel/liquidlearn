@@ -28,6 +28,7 @@ let dump sth = printfn "%A" sth
 // input and output data specification
 module Data =
     type BitT = Zero=0 | One=1
+    type StateT = BitT list
     type DataT = BitT list
 
     type Dataset =
@@ -41,14 +42,18 @@ module Data =
         member this.NoInstances = { Yes = []; No = this.No }
 
     // parse from string or others
-    let Parse (str:string) =
-        [ for c in str do
+    let FromString string =
+        [ for c in string do
             if c = '0' then yield BitT.Zero
             elif c = '1' then yield BitT.One
             elif c = ' ' then ()
             else failwith "invalid character in data string"
         ] |> List.rev
 
+    // parse from file
+    let FromFile filename =
+        FromString /@ (System.IO.File.ReadLines filename)
+        
     // flip bits
     let Flip (data:DataT) =
         [ for d in data ->

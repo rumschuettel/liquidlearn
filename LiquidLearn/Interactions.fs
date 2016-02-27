@@ -91,7 +91,7 @@ module Sets =
     // all Pauli interactions.
     let FullPauli (edge : Graph.EdgeT) : SetT =
         // create names list 00, 01, 02, 03, 10, ..., 23, 30, 31, 32, 33
-        let names n = [ for id in tuples ['0'; '1'; '2'; '3'] n -> string (new System.String(Seq.toArray id)) ]
+        let names n = [ for id in tuples ['0'; '1'; '3'] n -> string (new System.String(Seq.toArray id)) ]
         let namesWithoutControl = names (edge.Length - 1)
 
         // try to find a vertex C("001", ...) and return control identifier

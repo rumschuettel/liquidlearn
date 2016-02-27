@@ -13,9 +13,22 @@ open Graph
 let MeasurementStatistics (ket : Liquid.Ket) (qubits : int list) =
     ket.Probs !!(ket.Qubits, qubits) |> Array.toList
 
+type TestResults = {
+        YesStats : (float*float) list
+        NoStats  : (float*float) list
+}  with
+    override this.ToString() =
+        join "\n" (
+            [ for (e, sigma) in this.YesStats -> sprintf "y\t%.2e\t%.2e" e sigma ]
+            @
+            [ for (e, sigma) in this.NoStats -> sprintf "n\t%.2e\t%.2e" e sigma ]
+        )
+    member this.ToFile filename =
+        System.IO.File.WriteAllText(filename, string this)
         
 // simple controlled gate trainer
-type SimpleControlledTrainer (graph : Graph.Hypergraph, interactions : Graph.EdgeT -> Interactions.Sets.SetT) = class
+type SimpleControlledTrainer (graph : Graph.Hypergraph, interactions : Graph.EdgeT -> Interactions.Sets.SetT, ?trainOnQudits : bool) = class
+    let trainOnQudits = defaultArg trainOnQudits false
 
     // create controlled version of graph
     let controlled_graph = graph.ControlGraph ( fun edge ->
@@ -49,10 +62,10 @@ type SimpleControlledTrainer (graph : Graph.Hypergraph, interactions : Graph.Edg
                     trotter = 20,
                     schedule = [
                         0,     [|1.00; 0.00; 0.00|];
-                        25,   [|1.00; 0.25; 0.00|];
-                        100,  [|0.00; 1.00; 1.00|]
+                        50,   [|1.00; 0.25; 0.00|];
+                        200,  [|0.00; 1.00; 1.00|]
                     ],
-                    res = 10,
+                    res = 50,
                     spin = spin,
                     runonce = true,
                     decohereModel = []
@@ -84,7 +97,7 @@ type SimpleControlledTrainer (graph : Graph.Hypergraph, interactions : Graph.Edg
         dump parameters
         
         this
-
+ 
     member this.Test (data : Dataset) =
         match parameters with
         | None -> failwith "model not trained"
@@ -116,13 +129,13 @@ type SimpleControlledTrainer (graph : Graph.Hypergraph, interactions : Graph.Edg
             let spin = Liquid.Spin(interactions, graph.Size, Liquid.RunMode.Trotter1X)
             Liquid.Spin.Test(
                 tag = "test",
-                repeats = 10,
-                trotter = 4,
+                repeats = 20,
+                trotter = 20,
                 schedule = [
                     0,    [|1.0; 0.0|];
-                    100,  [|0.0; 1.0|]
+                    200,  [|0.0; 1.0|]
                 ],
-                res = 5,
+                res = 50,
                 spin = spin,
                 runonce = true,
                 decohereModel = []
@@ -159,15 +172,12 @@ type SimpleControlledTrainer (graph : Graph.Hypergraph, interactions : Graph.Edg
                     updateStateData no
                     spin.EnergyExpectation( stdev = true, qubits = state.Qubits )
             ]
-            dump (yesStats, noStats)
-            ()
 
+            { YesStats = yesStats; NoStats = noStats }
 
         
         // extract trained controls
         //dump !!(spin.Ket.Qubits, controlled_graph.Controls)
         //let controls = MeasurementStatistics spin.Ket controlled_graph.Controls
         //dump controls
-        
-        ()
 end
