@@ -60,7 +60,7 @@ type SimpleControlledTrainer
     // interactions to train
     let couplings = [
         for edge in trainingGraph.Edges do
-            yield Liquid.SpinTerm(2, interactions.ControlledInteraction edge, trainingGraph.WhichQubits edge, 1.0)
+            yield Liquid.SpinTerm(1, interactions.ControlledInteraction edge, trainingGraph.WhichQubits edge, 1.0)
     ]
 
     let mutable parameters = None
@@ -75,17 +75,17 @@ type SimpleControlledTrainer
             ( fun (tag, data : Dataset, weight) ->
                 // projector on training data. Interaction strength scaled to be dominating term
                 dump (data.ValuatedList weight)
-                let projector = Liquid.SpinTerm(1, Interactions.Projector (data.ValuatedList weight), trainingGraph.WhichQubits trainingGraph.Outputs, 10. * (float trainingGraph.Size))
+                let projector = Liquid.SpinTerm(2, Interactions.Projector (data.ValuatedList weight), trainingGraph.WhichQubits trainingGraph.Outputs, 10. * (float trainingGraph.Size))
 
                 // create spin model and train
-                let spin = Liquid.Spin(projector :: couplings, trainingGraph.Size, Liquid.RunMode.Trotter1X)
+                let spin = Liquid.Spin(projector :: couplings, trainingGraph.Size, Liquid.RunMode.Trotter1)
                 Liquid.Spin.Test(
                     tag = "train " + tag,
                     repeats = 20,
                     trotter = trotter,
                     schedule = [
                         0,     [|1.00; 0.00; 0.00|];
-                        50,   [|1.00; 0.25; 0.00|];
+                        50,   [|1.00; 0.25; 0.01|];
                         200,  [|0.00; 1.00; 1.00|]
                     ],
                     res = 50,

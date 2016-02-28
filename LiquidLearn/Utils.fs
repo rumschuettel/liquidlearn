@@ -38,7 +38,8 @@ let inline (<||) f list = Seq.map f list |> Seq.toList
 let inline (||>) list f = Seq.map f list |> Seq.toList
 
 // math stuff
-let nextPowerOf2 n = 2.0**(System.Math.Log(float n + 1.0, 2.0) |> ceil) |> round |> int
+let log2 n = System.Math.Log(float n, 2.0)
+let nextPowerOf2 n = 2.0**(log2 n |> ceil) |> round |> int
 
 // dump function
 let dump sth = printfn "%A" sth

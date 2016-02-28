@@ -70,7 +70,7 @@ let Projector (states : (float * Data.DataT) list) (theta : float) (qs : Liquid.
         ]
     // create new liquid gate and run
     (new Liquid.Gate(
-        Name = "projector",
+        Name = "Projector",
         Draw = (join "" [ for i in 0..qs.Length-1 -> sprintf "\\cwx[#%d]\\go[#%d]\\gate{Train}" i i ]),
         Help = sprintf "custom projector onto %A" states,
         Mat  = Liquid.CSMat(size, diagonal)
@@ -79,28 +79,34 @@ let Projector (states : (float * Data.DataT) list) (theta : float) (qs : Liquid.
 let MatrixInteraction name (matrix : float -> Liquid.CSMat) theta (qs : Liquid.Qubits) =
     (new Liquid.Gate(
         Name = name,
-        Draw = (join "" [ for i in 0..qs.Length-1 -> sprintf "\\cwx[#%d]\\go[#%d]\\gate{%s}" i i name ]),
+        Draw = sprintf "\\multigate{#%d}{%s}" (qs.Length-1) name,
         Mat  = matrix theta
     )).Run qs
 
 
 // like CgateNC, but for a qudit control; we assume all matrices are the same size
-let ControlledInteraction (matrices : (float -> Liquid.CSMat) list) theta (qs : Liquid.Qubits) =
+let ControlledInteraction name (matrices : (float -> Liquid.CSMat) list) theta (qs : Liquid.Qubits) =
     // size of single matrix block
     let singleMatrixSize = (matrices.[0] 0.0).Length
     // size of block of matrices to control
     let usefulMatrixSize = matrices.Length * singleMatrixSize
     // next power of 2, need at least one identity matrix, hence the +1
-    let nextPowerOf2 = nextPowerOf2 usefulMatrixSize
+    let totalSize = nextPowerOf2 (usefulMatrixSize + singleMatrixSize)
 
-    let identity = IdentityN (nextPowerOf2 - usefulMatrixSize)
+    let identity = IdentityN (totalSize - usefulMatrixSize)
     let matrices = (fun matrix -> matrix theta) <|| matrices
 
     // direct sum all matrices to 1 + m1+m2+...+mn
     let matrixSum = matrices |> List.fold (fun (bigmatrix : Liquid.CSMat) matrix -> bigmatrix.Plus matrix) identity
 
     (new Liquid.Gate(
-        Name = "foo",
+        Name = "QuditControl",
+        Draw = (
+            let numberOfControls = nextPowerOf2 (matrices.Length + 1) |> log2 |> ceil |> int
+            let numberOfQubits = singleMatrixSize |> log2 |> round |> int
+            let controlString = join "" [ for i in 0..numberOfControls-1 -> sprintf "\\qwx[#%d]\\go[#%d]\\control" i i ]
+            controlString + (sprintf "\qwx[#%d]\\go[#%d]\\multigate{#%d}{%s}" (numberOfControls+numberOfQubits-1) numberOfControls (numberOfControls+numberOfQubits-1) name )
+        ),
         Mat = matrixSum
     )).Run qs
 
@@ -111,8 +117,8 @@ module Sets =
     // interpret measurement result on controlled interaction
     let InterpretControlMeasurement (results : float list) (control : Graph.VertexT) =
         let interactions = control.Unwrap.interactions
-        let nextPowerOf2 = nextPowerOf2 interactions.Length
-        let controlCount = (nextPowerOf2 - interactions.Length)
+        let controlSlots = nextPowerOf2 (interactions.Length + 1)
+        let controlCount = (controlSlots - interactions.Length)
         // sum control identity probabilities
         let control =
             match results |> List.take controlCount |> List.sum with
@@ -126,7 +132,12 @@ module Sets =
     // Interaction base class
     [<AbstractClass>]
     type InteractionFactory() =
+        // give back gate name for a list of interaction ids
+        abstract member GateName : string list -> string
+        // give a complete list of possible interactions for an edge of given size
         abstract member Names : int -> string list
+        // for any id returned by Names, this function has to return a valid matrix
+        // the size of the matrix has to be n qubits, where n is given to Names to yield the id.
         abstract member Matrix : string -> (float -> Liquid.CSMat)
 
         member this.ListPossibleInteractions (edge : Graph.EdgeT) =
@@ -136,19 +147,34 @@ module Sets =
             MatrixInteraction name (this.Matrix name)
 
         member this.ControlledInteraction (edge : Graph.EdgeT) =
-            let matrices = [ for name in edge.GetControl.Unwrap.interactions -> this.Matrix name ]
-            ControlledInteraction matrices
+            let interactions = edge.GetControl.Unwrap.interactions
+            let matrices = [ for name in interactions -> this.Matrix name ]
+            ControlledInteraction (this.GateName interactions) matrices
 
     // Pauli matrix products
     type Paulis() =
         inherit InteractionFactory()
 
-        override this.Names n = [ for id in tuples ['0'; '3'; '2'] n -> string (new System.String(Seq.toArray id)) ]
-        override this.Matrix id = GeneratedCode.PauliProductMatrices.Get id
+        override this.GateName list = sprintf "%d Paulis" list.Length
+
+        override this.Names n = [ for name in tuples ['0'; '3'; '2'] n -> string (new System.String(Seq.toArray name)) ]
+        override this.Matrix name = GeneratedCode.PauliProductMatrices.Get name
 
     // Projectors
     type Projectors() =
         inherit InteractionFactory()
 
-        override this.Names n = [ for id in tuples ['0'; '1'] n -> string (new System.String(Seq.toArray id)) ]
-        override this.Matrix id = GeneratedCode.Rank1ProjectionMatrices.Get id
+        override this.GateName list = sprintf "%d Projectors" list.Length
+
+        override this.Names n = [ for name in tuples ['0'; '1'] n -> string (new System.String(Seq.toArray name)) ]
+        override this.Matrix name = GeneratedCode.Rank1ProjectionMatrices.Get name
+
+    // Compressed Projectors
+    // These are 2-local 3-qubit interactions, which saves a lot of qubits when training on qudits
+    type CompressedProjectors() =
+        inherit InteractionFactory()
+
+        override this.GateName list = sprintf "%d CProjectors" list.Length
+
+        override this.Names n = GeneratedCode.Rank1CompressedProjectionMatrices.List |> List.filter (fun name -> name.Length = n)
+        override this.Matrix name = GeneratedCode.Rank1CompressedProjectionMatrices.Get name
