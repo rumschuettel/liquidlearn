@@ -18,13 +18,18 @@ type TestResults = {
         NoStats  : (float*float) list
 }  with
     override this.ToString() =
-        join "\n" (
-            [ for (e, sigma) in this.YesStats -> sprintf "y\t%.2e\t%.2e" e sigma ]
+        join "" (
+            [ for (e, sigma) in this.YesStats -> sprintf "y\t%.2e\t%.2e\n" e sigma ]
             @
-            [ for (e, sigma) in this.NoStats -> sprintf "n\t%.2e\t%.2e" e sigma ]
+            [ for (e, sigma) in this.NoStats -> sprintf "n\t%.2e\t%.2e\n" e sigma ]
         )
-    member this.ToFile filename =
-        System.IO.File.WriteAllText(filename, string this)
+    member this.ToFile (filename, ?append) =
+        let append = defaultArg append false
+        if append then
+            System.IO.File.AppendAllText(filename, string this)
+        else
+            System.IO.File.WriteAllText(filename, string this)
+
         
 
 
@@ -78,14 +83,14 @@ type SimpleControlledTrainer
                 let projector = Liquid.SpinTerm(2, Interactions.Projector (data.ValuatedList weight), trainingGraph.WhichQubits trainingGraph.Outputs, 10. * (float trainingGraph.Size))
 
                 // create spin model and train
-                let spin = Liquid.Spin(projector :: couplings, trainingGraph.Size, Liquid.RunMode.Trotter1)
+                let spin = Liquid.Spin(projector :: couplings, trainingGraph.Size, Liquid.RunMode.Trotter1X)
                 Liquid.Spin.Test(
                     tag = "train " + tag,
                     repeats = 20,
                     trotter = trotter,
                     schedule = [
                         0,     [|1.00; 0.00; 0.00|];
-                        50,   [|1.00; 0.25; 0.01|];
+                        50,   [|1.00; 0.25; 0.00|];
                         200,  [|0.00; 1.00; 1.00|]
                     ],
                     res = 50,

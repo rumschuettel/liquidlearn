@@ -29,13 +29,27 @@ let rec cartesian (lists : 'a list list) =
     | [] -> []
     | head::tail -> List.collect (fun a -> f0 a (cartesian tail)) head
 
-let tuples (list: 'a list) (n : int) =
+// tuples of size n
+let tuples n (list: 'a list) =
     cartesian [ for i in 1..n -> list ]
+
+// distribute element across list
+let rec distribute e = function
+    | [] -> [[e]]
+    | x::xs' as xs -> (e::xs)::[for xs in distribute e xs' -> x::xs]
+
+// all permutations of list
+let rec permute = function
+    | [] -> [[]]
+    | e::xs -> List.collect (distribute e) (permute xs)
+
 
 // shortcut aliases
 let join = String.concat
 let inline (<||) f list = Seq.map f list |> Seq.toList
 let inline (||>) list f = Seq.map f list |> Seq.toList
+let inline (|||>) listofLists f = listofLists ||> (fun list -> list ||> f)
+let inline (||||>) listofLists f = listofLists |||> (fun list -> list ||> f)
 
 // math stuff
 let log2 n = System.Math.Log(float n, 2.0)
@@ -78,7 +92,7 @@ module Data =
             elif c = '1' then yield BitT.One
             elif c = ' ' then ()
             else failwith "invalid character in data string"
-        ] |> List.rev
+        ]
 
     // parse from file
     let FromFile filename =

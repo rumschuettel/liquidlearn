@@ -50,8 +50,9 @@ module Matrices =
 open Matrices
 
 let Projector (states : (float * Data.DataT) list) (theta : float) (qs : Liquid.Qubits) =
-    // state2pos (Parse "011") = 6
+    // state2pos (Parse "011") = 3
     let state2pos (signature : Data.DataT) = 
+        let signature = signature |> List.rev
         [ for i in 0..signature.Length-1 -> if signature.[i] = Data.BitT.One then pown 2 i else 0 ] |> List.sum
 
     // matrix size
@@ -157,7 +158,7 @@ module Sets =
 
         override this.GateName list = sprintf "%d Paulis" list.Length
 
-        override this.Names n = [ for name in tuples ['0'; '3'; '2'] n -> string (new System.String(Seq.toArray name)) ]
+        override this.Names n = [ for name in tuples n ['0'; '3'; '2'] -> string (new System.String(Seq.toArray name)) ]
         override this.Matrix name = GeneratedCode.PauliProductMatrices.Get name
 
     // Projectors
@@ -166,7 +167,7 @@ module Sets =
 
         override this.GateName list = sprintf "%d Projectors" list.Length
 
-        override this.Names n = [ for name in tuples ['0'; '1'] n -> string (new System.String(Seq.toArray name)) ]
+        override this.Names n = [ for name in tuples n ['0'; '1'] -> string (new System.String(Seq.toArray name)) ]
         override this.Matrix name = GeneratedCode.Rank1ProjectionMatrices.Get name
 
     // Compressed Projectors

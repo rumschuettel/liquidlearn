@@ -35,6 +35,37 @@ module LearnApp =
 
     [<LQD>]
     let Benchmark() =
+        // splits list in two
+        let splitYesNo (list : 'a list) = [List.take (list.Length/2) list; List.skip (list.Length/2) list]
+
+        // create all possible training sets
+        let data =
+            ["0"; "1"]
+            |> tuples 2
+            |> permute
+            ||> splitYesNo // create all possible training sets
+            |||> Set.ofList // delete all duplocates, e.g. yes and no swapped, order of data in yes or no
+            ||> Set.ofList
+            |> Set.ofList
+            |> Set.toList
+            ||> Set.toList
+            |||> Set.toList
+            ||||> ((join "") >> FromString)
+            ||> fun sets -> { Yes = sets.[0]; No = sets.[1] }
+
+        dump data
+
+        let edges = [ O"1" --- O"2" ]
+        let graph = new Hypergraph(edges)
+        let model = new SimpleControlledTrainer(graph, Sets.Projectors(), trainOnQudits = true)
+
+        data
+            ||> fun data ->
+                let trained = model.Train data
+                let results = model.Test data
+                results.ToFile ("benchmark.test", append = true)
+                results
+            |> dump
         ()
         
 
