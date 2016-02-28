@@ -12,7 +12,7 @@ open Graph
 // extract measurement statistics from a list of qubits
 let MeasurementStatistics (ket : Liquid.Ket) (qubits : int list) =
     ket.Probs !!(ket.Qubits, List.rev qubits) |> Array.toList
-
+     
 type TestResults = {
         YesStats : (float*float) list
         NoStats  : (float*float) list
@@ -29,8 +29,15 @@ type TestResults = {
 
 
 // simple controlled gate trainer
-type SimpleControlledTrainer (graph : Graph.Hypergraph, interactions : Interactions.Sets.InteractionFactory, ?trainOnQudits : bool) = class
-    let trainOnQudits = defaultArg trainOnQudits true
+type SimpleControlledTrainer
+    (
+        graph : Graph.Hypergraph,
+        interactions : Interactions.Sets.InteractionFactory,
+        ?trainOnQudits : bool,
+        ?trotter : int
+    ) = class
+    let trainOnQudits = defaultArg trainOnQudits false
+    let trotter = defaultArg trotter 20
 
     // create controlled version of graph
     let trainingGraph = graph.AddControls ( fun edge ->
@@ -45,7 +52,7 @@ type SimpleControlledTrainer (graph : Graph.Hypergraph, interactions : Interacti
                 id = randomString 5;
                 interactions = [interaction]
             }]
-    )
+    ) 
     do 
         dump trainingGraph
         dump [ for e in trainingGraph.Edges -> trainingGraph.WhichQubits e ]
@@ -75,7 +82,7 @@ type SimpleControlledTrainer (graph : Graph.Hypergraph, interactions : Interacti
                 Liquid.Spin.Test(
                     tag = "train " + tag,
                     repeats = 20,
-                    trotter = 50,
+                    trotter = trotter,
                     schedule = [
                         0,     [|1.00; 0.00; 0.00|];
                         50,   [|1.00; 0.25; 0.00|];

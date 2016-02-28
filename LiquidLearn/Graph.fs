@@ -22,7 +22,7 @@ type VertexT =
     // return number of qubits necessary to represent vertex
     member this.HowManyQubits =
         match this with
-        | C c -> System.Math.Log(float c.interactions.Length, 2.0) + 1.0 |> ceil |> int
+        | C c -> System.Math.Log(float c.interactions.Length + 1.0, 2.0) |> ceil |> int
         | _ -> 1
 
 and ControlT = {

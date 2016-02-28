@@ -143,7 +143,7 @@ module Sets =
     type Paulis() =
         inherit InteractionFactory()
 
-        override this.Names n = [ for id in tuples ['0'; '1'; '2'; '3'] n -> string (new System.String(Seq.toArray id)) ]
+        override this.Names n = [ for id in tuples ['0'; '3'; '2'] n -> string (new System.String(Seq.toArray id)) ]
         override this.Matrix id = GeneratedCode.PauliProductMatrices.Get id
 
     // Projectors

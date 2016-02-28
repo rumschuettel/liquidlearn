@@ -17,17 +17,19 @@ module LearnApp =
     [<LQD>]
     let Learn() =
         let data = {
-            Yes = (FromString <|| ["00"; "01"])
-            No  = (FromString <|| ["11"])
+            Yes = (FromString <|| ["001"; "111"])
+            No  = (FromString <|| ["000"; "101"; "110"])
         }
-        let edges = [ O"1" --- O"2";]
+        let edges = [ O"1" --- V"h";
+                      O"2" --- V"h";
+                      V"h" --- O"3" ]
         let graph = new Hypergraph(edges)
-        let model = new SimpleControlledTrainer(graph, Sets.Projectors())
+        let model = new SimpleControlledTrainer(graph, Sets.Projectors(), trainOnQudits = true)
         let trained = model.Train data
         
         let results = model.Test {
-            Yes = (FromString <|| ["00"; "10";])
-            No  = (FromString <|| ["01"; "11";])
+            Yes = (FromString <|| ["001"; "111"; "010"; "100";])
+            No  = (FromString <|| ["000"; "110"; "011"; "101"])
         }
         printfn "%s" (string results)
         results.ToFile "model2.test"
