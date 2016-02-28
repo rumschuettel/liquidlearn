@@ -17,8 +17,8 @@ module LearnApp =
     [<LQD>]
     let Learn() =
         let data = {
-            Yes = (FromString /@ ["00"; "10"])
-            No  = (FromString /@ ["11"])
+            Yes = (FromString <|| ["00"; "01"])
+            No  = (FromString <|| ["11"])
         }
         let edges = [ O"1" --- O"2";]
         let graph = new Hypergraph(edges)
@@ -26,8 +26,8 @@ module LearnApp =
         let trained = model.Train data
         
         let results = model.Test {
-            Yes = (FromString /@ ["000"; "10";])
-            No  = (FromString /@ ["01"; "11";])
+            Yes = (FromString <|| ["00"; "10";])
+            No  = (FromString <|| ["01"; "11";])
         }
         printfn "%s" (string results)
         results.ToFile "model2.test"

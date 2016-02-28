@@ -11,7 +11,7 @@ open Graph
 
 // extract measurement statistics from a list of qubits
 let MeasurementStatistics (ket : Liquid.Ket) (qubits : int list) =
-    ket.Probs !!(ket.Qubits, qubits) |> Array.toList
+    ket.Probs !!(ket.Qubits, List.rev qubits) |> Array.toList
 
 type TestResults = {
         YesStats : (float*float) list
@@ -30,17 +30,21 @@ type TestResults = {
 
 // simple controlled gate trainer
 type SimpleControlledTrainer (graph : Graph.Hypergraph, interactions : Interactions.Sets.InteractionFactory, ?trainOnQudits : bool) = class
-    let trainOnQudits = defaultArg trainOnQudits false
+    let trainOnQudits = defaultArg trainOnQudits true
 
     // create controlled version of graph
     let trainingGraph = graph.AddControls ( fun edge ->
-        [
-            for interaction in interactions.ListPossibleInteractions edge ->
-            {
+        if trainOnQudits then
+            [{
+                id = randomString 5;
+                interactions = interactions.ListPossibleInteractions edge
+            }]
+        else
+            [ for interaction in interactions.ListPossibleInteractions edge ->
+              {
                 id = randomString 5;
                 interactions = [interaction]
-            }
-        ]
+            }]
     )
     do 
         dump trainingGraph
@@ -55,9 +59,15 @@ type SimpleControlledTrainer (graph : Graph.Hypergraph, interactions : Interacti
     let mutable parameters = None
     member this.Train (data : Dataset) =
         // run training once for YES and once for NO-instances
-        let res =
+        // result format is
+        // yes instances : [ for all edges : [("interaction1", strength); ...]; [...]; ...];
+        // no instances ...
+        let results =
+            [("YES", data.YesInstances, -1.0); ("NO", data.NoInstances, 1.0)]
+            ||>
             ( fun (tag, data : Dataset, weight) ->
                 // projector on training data. Interaction strength scaled to be dominating term
+                dump (data.ValuatedList weight)
                 let projector = Liquid.SpinTerm(1, Interactions.Projector (data.ValuatedList weight), trainingGraph.WhichQubits trainingGraph.Outputs, 10. * (float trainingGraph.Size))
 
                 // create spin model and train
@@ -65,7 +75,7 @@ type SimpleControlledTrainer (graph : Graph.Hypergraph, interactions : Interacti
                 Liquid.Spin.Test(
                     tag = "train " + tag,
                     repeats = 20,
-                    trotter = 20,
+                    trotter = 50,
                     schedule = [
                         0,     [|1.00; 0.00; 0.00|];
                         50,   [|1.00; 0.25; 0.00|];
@@ -79,31 +89,57 @@ type SimpleControlledTrainer (graph : Graph.Hypergraph, interactions : Interacti
                 
 
                 // extract trained control probabilities
-                [ for edge in trainingGraph.Edges -> MeasurementStatistics spin.Ket (trainingGraph.WhichQubits edge.GetControl) ]
-
-            ) /@ [("YES", data.YesInstances, -1.0); ("NO", data.NoInstances, 1.0)]
-
-        // combine training results: extract control weights
-        let yesWeights = (fun (prob : float list) -> prob.[0]) /@ res.[0]
-        let noWeights = (fun (prob : float list) -> prob.[1]) /@ res.[1]
-        let weights = 
-            [ for i in 0..yesWeights.Length-1 -> yesWeights.[i] + noWeights.[i] ]
-            |>
-            // normalize to -1 to 1
-            (fun weights ->
-                let min, max = List.min weights, List.max weights
-                [ for weight in weights ->
-                    if max <> min then
-                        (weight - min) / (max - min) * 2. - 1.
-                    else
-                        0.
+                let controlProbabilities = [
+                    for edge in trainingGraph.Edges ->
+                        let control = edge.GetControl
+                        let results = MeasurementStatistics spin.Ket ((trainingGraph.WhichQubits control))
+                        Interactions.Sets.InterpretControlMeasurement results control
                 ]
+                
+                dump controlProbabilities
+                controlProbabilities
             )
-        
-        let controlWeights = List.zip trainingGraph.Edges weights
-        parameters <- Some ((fun (edge : EdgeT, weight) ->
-             edge.StripControl, edge.GetControl.Unwrap.interactions.[0], weight
-        ) /@ controlWeights)
+            |> (fun res ->
+                let yes = res.[0]
+                let no = res.[1]
+
+                // normalize weights to [-1, 1]
+                let minYes = yes |> List.concat |> List.minBy snd |> snd
+                let maxYes = yes |> List.concat |> List.maxBy snd |> snd
+                let minNo = no |> List.concat |> List.minBy snd |> snd
+                let maxNo = no |> List.concat |> List.maxBy snd |> snd
+
+                let yesNormalizer = if (maxYes - minYes) <> 0.0 then fun v -> (v - minYes) / (maxYes - minYes) else id
+                let noNormalizer = if (maxNo - minNo) <> 0.0 then fun v -> (v - minNo) / (maxNo - minNo) else id
+
+                // for every edge, assemble list of interaction name * strength
+                let noDict = no ||> Map.ofList
+                let addedWeights = [
+                    for edge in 0..yes.Length-1 ->
+                    [
+                        for (name, yesWeight) in yes.[edge] do
+                            let noWeight = noDict.[edge].[name]
+                            yield name, (yesNormalizer yesWeight) - (noNormalizer noWeight)
+                    ]
+                ] 
+
+                // normalize weights to [-1, 1]
+                let weightsMax = addedWeights |> List.concat |> List.maxBy snd |> snd
+                [ for edge in addedWeights -> [ for interaction in edge -> fst(interaction), snd(interaction) / weightsMax ] ]               
+            )
+
+        // combine training results with edges and flatten,
+        // so that we have tuples (edge, interaction, weight)
+        parameters <- Some (
+            (List.zip trainingGraph.Edges results)
+            ||>
+            (
+                fun (edge, interactions) ->
+                    let plainEdge = edge.StripControl
+                    [ for i in interactions -> plainEdge, fst(i), snd(i) ]
+            )
+            |> List.concat
+        )
         dump parameters
         
         this
@@ -116,7 +152,7 @@ type SimpleControlledTrainer (graph : Graph.Hypergraph, interactions : Interacti
             let couplings = [
                 for p in parameters ->
                     let (edge, name, strength) = p
-                    Liquid.SpinTerm(1, interactions.Interaction name, graph.WhichQubits edge, -strength)
+                    Liquid.SpinTerm(1, interactions.Interaction name, graph.WhichQubits edge, strength)
             ]
 
             let spin = Liquid.Spin(couplings, graph.Size, Liquid.RunMode.Trotter1X)
@@ -146,7 +182,6 @@ type SimpleControlledTrainer (graph : Graph.Hypergraph, interactions : Interacti
             state.Dump Liquid.Util.showInd
 
             let updateStateData (data : DataT) =
-                let data = List.rev data // TODO check order of data and why we have to flip it around here
                 [ for i in 0..outputs.Length-1 -> i ] |> List.map (fun i ->
                     match data.[i] with
                     | BitT.Zero _ -> qubits.[outputs.[i]].StateSet(Liquid.Zero)

@@ -67,7 +67,7 @@ type EdgeT = | EdgeT of VertexT list
 
 // F# does not support overloading non-tuple operators
 let inline (---) a b = 
-    unbox<VertexT> /@ (
+    (
         match box a, box b with
         | (:? EdgeT as a), (:? EdgeT as b) -> [a.Vertices; b.Vertices] |> List.concat
         | (:? VertexT as a), (:? EdgeT as b) -> [[a]; b.Vertices] |> List.concat
@@ -75,6 +75,7 @@ let inline (---) a b =
         | (:? VertexT as a), (:? VertexT as b) -> [a; b]
         | _ -> failwith "not a valid hyperedge type"
     )
+    ||> unbox<VertexT>
     |> EdgeT
 
 
@@ -93,20 +94,21 @@ type Hypergraph(edges : EdgeT list) = class
     // create a map vertex -> qubit number, e.g. if we have V"1", C"...", V"2" where C controls 10 interactions, we would have
     // V"1" -> 0, C"..." -> 1, 2, 3, 4 and V"2" -> 5
     let qubitLookupTable =
-        vertices |> List.fold (fun (list : (VertexT * int list) list) v ->
-            let qubits = (snd /@ list) |> List.concat
+        vertices
+        |> List.fold (fun (list : (VertexT * int list) list) v ->
+            let qubits = list ||> snd |> List.concat
             let max = List.max (-1 :: qubits)
             (v, [for i in (max+1)..(max+v.HowManyQubits) -> i]) :: list
         ) []
         |> Map.ofList   
-    let qubitCount = ((snd /@ (Map.toList qubitLookupTable)) |> List.concat |> List.max) + 1
+    let qubitCount = ((Map.toList qubitLookupTable) ||> snd |> List.concat |> List.max) + 1
 
     do dump qubitLookupTable
 
 
     member this.WhichQubits (vertex : VertexT) = qubitLookupTable.[vertex]
-    member this.WhichQubits (vertices : VertexT list) = [ for v in vertices -> qubitLookupTable.[v] ] |> List.concat
-    member this.WhichQubits (edge : EdgeT) = this.WhichQubits edge.Vertices
+    member this.WhichQubits (vertices : VertexT list) = vertices ||> this.WhichQubits |> List.concat
+    member this.WhichQubits (edge : EdgeT) = edge.Vertices |> this.WhichQubits
 
     // prints out the hypergraph structure
     override this.ToString() = sprintf "vertices:\n%A\nedges:\n%A" vertices edges

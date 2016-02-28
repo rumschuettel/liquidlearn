@@ -4,6 +4,21 @@ module LiquidLearn.Utils
 // check if list contains a
 let contains a list = List.exists (fun element -> element = a) list
 
+// return index of maximum element
+let maxIndex seq =  
+    seq
+    |> Seq.mapi (fun i x -> i, x)
+    |> Seq.maxBy snd 
+    |> fst
+
+// normalize list
+let normalizeBy f list =
+    let max = f list |> abs
+    match max with
+    | 0.0 -> failwith "list of zeroes cannot be normalized"
+    | _ -> list |> List.map (fun v -> v / max)
+let normalize list = normalizeBy List.max list
+
 // cartesian product of a sequence of sequences
 let rec cartesian (lists : 'a list list) = 
     let f0 a = function
@@ -19,7 +34,11 @@ let tuples (list: 'a list) (n : int) =
 
 // shortcut aliases
 let join = String.concat
-let inline (/@) f list = [ for element in list -> f element ]
+let inline (<||) f list = Seq.map f list |> Seq.toList
+let inline (||>) list f = Seq.map f list |> Seq.toList
+
+// math stuff
+let nextPowerOf2 n = 2.0**(System.Math.Log(float n + 1.0, 2.0) |> ceil) |> round |> int
 
 // dump function
 let dump sth = printfn "%A" sth
@@ -62,7 +81,7 @@ module Data =
 
     // parse from file
     let FromFile filename =
-        FromString /@ (System.IO.File.ReadLines filename)
+        FromString <|| (System.IO.File.ReadLines filename)
         
     // flip bits
     let Flip (data:DataT) =
