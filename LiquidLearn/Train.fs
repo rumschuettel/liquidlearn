@@ -12,7 +12,10 @@ open Graph
 // extract measurement statistics from a list of qubits
 let MeasurementStatistics (ket : Liquid.Ket) (qubits : int list) =
     ket.Probs !!(ket.Qubits, List.rev qubits) |> Array.toList
-     
+
+
+
+ 
 type TestResults = {
         YesStats : (float*float) list
         NoStats  : (float*float) list

@@ -50,7 +50,8 @@ module LearnApp =
             |> Set.toList
             ||> Set.toList
             |||> Set.toList
-            ||||> ((join "") >> FromString)
+            ||||> join ""
+            ||||> FromString
             ||> fun sets -> { Yes = sets.[0]; No = sets.[1] }
 
         dump data
@@ -63,11 +64,11 @@ module LearnApp =
             ||> fun data ->
                 let trained = model.Train data
                 let results = model.Test data
-                results.ToFile ("benchmark.test", append = true)
+                results.ToFile ("benchmark2.test", append = true)
                 results
             |> dump
         ()
-        
+
 
     [<EntryPoint>]
     let main _ = 

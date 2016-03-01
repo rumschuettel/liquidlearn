@@ -179,3 +179,14 @@ module Sets =
 
         override this.Names n = GeneratedCode.Rank1CompressedProjectionMatrices.List |> List.filter (fun name -> name.Length = n)
         override this.Matrix name = GeneratedCode.Rank1CompressedProjectionMatrices.Get name
+
+    // Compressed Random Matrices
+    // set of 5 random sparse Hermitian matrices
+    // These are 2-local 3-qubit interactions or 1-local 2-qubit
+    type CompressedRandom() =
+        inherit InteractionFactory()
+
+        override this.GateName list = sprintf "%d CRandom" list.Length
+
+        override this.Names n = GeneratedCode.RandomHermitianCompressed.List |> List.filter (fun name -> name.Length = n+1)
+        override this.Matrix name = GeneratedCode.RandomHermitianCompressed.Get name
