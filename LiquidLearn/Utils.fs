@@ -44,10 +44,16 @@ let rec permute = function
     | e::xs -> List.collect (distribute e) (permute xs)
 
 
-// shortcut aliases
+// aliases, shortcuts and F# greatness
 let join = String.concat
+
 let inline (<||) f list = Seq.map f list |> Seq.toList
-let inline (||>) list f = Seq.map f list |> Seq.toList
+
+type PipeForward = PipeForward with
+    static member inline ($) (PipeForward, list: 'a list) = fun f -> list |> List.map f
+    static member inline ($) (PipeForward, (a, b): 'a * 'a) = fun f -> [a; b] |> List.map f |> function | [a; b] -> (a, b) | _ -> failwith "does not happen"
+
+let inline (||>) list f = (PipeForward $ list) f
 let inline (|||>) listofLists f = listofLists ||> (fun list -> list ||> f)
 let inline (||||>) listofLists f = listofLists |||> (fun list -> list ||> f)
 

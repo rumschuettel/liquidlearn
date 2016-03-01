@@ -35,16 +35,17 @@ module LearnApp =
 
     [<LQD>]
     let Benchmark() =
+        Dumps "Training Benchmark Mode"
         // splits list in two
         let splitYesNo (list : 'a list) = [List.take (list.Length/2) list; List.skip (list.Length/2) list]
 
         // create all possible training sets
         let data =
             ["0"; "1"]
-            |> tuples 2
-            |> permute
+            |> tuples 3 // all possible data tuples
+            |> permute // and all possible permutations of these datasets
             ||> splitYesNo // create all possible training sets
-            |||> Set.ofList // delete all duplocates, e.g. yes and no swapped, order of data in yes or no
+            |||> Set.ofList // delete all duplicates, e.g. yes and no swapped, order of data in yes or no
             ||> Set.ofList
             |> Set.ofList
             |> Set.toList
@@ -56,15 +57,15 @@ module LearnApp =
 
         data ||> dump |> ignore
 
-        let edges = [ O"1" --- O"2" ]
+        let edges = [ O"1" --- O"2" --- O"3" ]
         let graph = new Hypergraph(edges)
-        let model = new SimpleControlledTrainer(graph, Sets.Projectors(), trainOnQudits = true)
+        let model = new SimpleControlledTrainer(graph, Sets.CompressedHistory(), trainOnQudits = true)
 
         data
             ||> fun data ->
                     let trained = model.Train data
                     let results = model.Test data
-                    results.ToFile ("benchmark2.test", append = true)
+                    results.ToFile ("benchmarkHistory2.test", append = true)
                     results
             ||> dump |> ignore
         ()
@@ -72,6 +73,7 @@ module LearnApp =
 
     [<EntryPoint>]
     let main _ = 
-        show "LiquidLearn"
+        Dumps "LiquidLearn (c) 2016 Johannes Bausch (jkrb2@cam.ac.uk)"
+        System.Console.ForegroundColor <- System.ConsoleColor.DarkGray // tone down liquid output
 
         App.RunLiquid()

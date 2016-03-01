@@ -115,23 +115,9 @@ let ControlledInteraction name (matrices : (float -> Liquid.CSMat) list) theta (
 module Sets =
     type InteractionT = (float -> Liquid.Qubits -> unit)
 
-    // interpret measurement result on controlled interaction
-    let InterpretControlMeasurement (results : float list) (control : Graph.VertexT) =
-        let interactions = control.Unwrap.interactions
-        let controlSlots = nextPowerOf2 (interactions.Length + 1)
-        let controlCount = (controlSlots - interactions.Length)
-        // sum control identity probabilities
-        let control =
-            match results |> List.take controlCount |> List.sum with
-            | 0.0 -> 1.0
-            | v -> v
-
-        let results = results |> List.skip controlCount |> normalize ||> ( fun v -> v / control )        
-        List.zip interactions results
-
     // Interaction base class
     [<AbstractClass>]
-    type InteractionFactory() =
+    type IInteractionFactory() =
         // give back gate name for a list of interaction ids
         abstract member GateName : string list -> string
         // give a complete list of possible interactions for an edge of given size
@@ -153,7 +139,7 @@ module Sets =
 
     // Pauli matrix products
     type Paulis() =
-        inherit InteractionFactory()
+        inherit IInteractionFactory()
 
         override this.GateName list = sprintf "%d Paulis" list.Length
 
@@ -162,7 +148,7 @@ module Sets =
 
     // Projectors
     type Projectors() =
-        inherit InteractionFactory()
+        inherit IInteractionFactory()
 
         override this.GateName list = sprintf "%d Projectors" list.Length
 
@@ -172,7 +158,7 @@ module Sets =
     // Compressed Projectors
     // These are 2-local 3-qubit interactions, which saves a lot of qubits when training on qudits
     type CompressedProjectors() =
-        inherit InteractionFactory()
+        inherit IInteractionFactory()
 
         override this.GateName list = sprintf "%d CProjectors" list.Length
 
@@ -183,9 +169,23 @@ module Sets =
     // set of 5 random sparse Hermitian matrices
     // These are 2-local 3-qubit interactions or 1-local 2-qubit
     type CompressedRandom() =
-        inherit InteractionFactory()
+        inherit IInteractionFactory()
 
         override this.GateName list = sprintf "%d CRandom" list.Length
 
         override this.Names n = GeneratedCode.RandomHermitianCompressed.List |> List.filter (fun name -> name.Length = n+1)
         override this.Matrix name = GeneratedCode.RandomHermitianCompressed.Get name
+
+    // Compressed History State Matrices
+    // set of 5 special matrices from History state constructions
+    // These are 2-local 3-qubit interactions
+    type CompressedHistory() =
+        inherit IInteractionFactory()
+
+        override this.GateName list = sprintf "%d CHistory" list.Length
+
+        override this.Names n =
+            match n with
+            | 3 -> GeneratedCode.UniversalHistoryCompressed.List
+            | _ -> failwith "universal history matrices only computed for edge size 3"
+        override this.Matrix name = GeneratedCode.UniversalHistoryCompressed.Get name

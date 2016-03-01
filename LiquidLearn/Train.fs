@@ -14,34 +14,47 @@ let MeasurementStatistics (ket : Liquid.Ket) (qubits : int list) =
     ket.Probs !!(ket.Qubits, List.rev qubits) |> Array.toList
 
 
+// interpret measurement result on controlled interaction
+let InterpretControlMeasurement (results : float list) (control : Graph.VertexT) =
+    let interactions = control.Unwrap.interactions
+    let controlSlots = nextPowerOf2 (interactions.Length + 1)
+    let controlCount = (controlSlots - interactions.Length)
+    // sum control identity probabilities
+    let control =
+        match results |> List.take controlCount |> List.sum with
+        | 0.0 -> 1.0
+        | v -> v
 
-[<StructuredFormatDisplay("TestResults {TableForm}")>]
+    let results = results |> List.skip controlCount |> normalize ||> ( fun v -> v / control )        
+    List.zip interactions results
+
+
+[<StructuredFormatDisplay("TestResults {TableForm} \n")>]
 type TestResults = {
         YesStats : (float*float) list
         NoStats  : (float*float) list
 }  with
     member this.TableForm =
-        join "" (
-            [ for (e, sigma) in this.YesStats -> sprintf "\ny\t%.2e\t%.2e" e sigma ]
+        join "\n" (
+            [ for (e, sigma) in this.YesStats -> sprintf "y\t%.2e\t%.2e" e sigma ]
             @
-            [ for (e, sigma) in this.NoStats -> sprintf "\nn\t%.2e\t%.2e" e sigma ]
+            [ for (e, sigma) in this.NoStats -> sprintf "n\t%.2e\t%.2e" e sigma ]
         )
 
     member this.ToFile (filename, ?append) =
         let append = defaultArg append false
         if append then
-            System.IO.File.AppendAllText(filename, string this)
+            System.IO.File.AppendAllText(filename, this.TableForm)
         else
-            System.IO.File.WriteAllText(filename, string this)
+            System.IO.File.WriteAllText(filename, this.TableForm)
 
-        
 
 
 // simple controlled gate trainer
 type SimpleControlledTrainer
     (
         graph : Graph.Hypergraph,
-        interactions : Interactions.Sets.InteractionFactory,
+        interactions : Interactions.Sets.IInteractionFactory,
         ?trainOnQudits : bool,
         ?trotter : int
     ) = class
@@ -64,31 +77,42 @@ type SimpleControlledTrainer
     )
 
     do
-        Dumps "SimpleControlledTrainer"
+        Dumps "Simple Controlled Qubit Trainer"
+        dumps (sprintf "trainOnQudits=%s, trotter=%d" (if trainOnQudits then "yes" else "no") trotter)
         dump graph
-        dumps "augmented"
+        dumps "training on"
         dump trainingGraph
         dumps (sprintf "with interaction set %A" interactions)
 
     // interactions to train
     let couplings = [
         for edge in trainingGraph.Edges do
-            yield Liquid.SpinTerm(1, interactions.ControlledInteraction edge, trainingGraph.WhichQubits edge, 1.0)
+            yield Liquid.SpinTerm(
+                s = 1,
+                o = interactions.ControlledInteraction edge,
+                idx = trainingGraph.WhichQubits edge,
+                a = 1.0
+            )
     ]
 
     let mutable parameters = None
-    member this.Train (data : DataSet) =
+    member this.Train (data : DataSet, ?dataProjectorWeight : float) =
+        let dataProjectorWeight = defaultArg dataProjectorWeight 10.
         // run training once for YES and once for NO-instances
-        // result format is
-        // yes instances : [ for all edges : [("interaction1", strength); ...]; [...]; ...];
-        // no instances ...
+
         let results =
-            [("YES", data.YesInstances, -1.0); ("NO", data.NoInstances, 1.0)]
+            (("YES", data.YesInstances, -1.0), ("NO", data.NoInstances, 1.0))
             ||>
             ( fun (tag, data : DataSet, weight) ->
                 // projector on training data. Interaction strength scaled to be dominating term
-                dumps (sprintf "training with weight %.2f on %A" weight data)
-                let projector = new Liquid.SpinTerm(2, Interactions.Projector (data.ValuatedList weight), trainingGraph.WhichQubits trainingGraph.Outputs, 10. * (float trainingGraph.Size))
+                dumps (sprintf "training %s (weight %.2f) using %A" tag weight data)
+                let projector =
+                    Liquid.SpinTerm(
+                        s = 2,
+                        o = Interactions.Projector (data.ValuatedList weight),
+                        idx = trainingGraph.WhichQubits trainingGraph.Outputs,
+                        a = dataProjectorWeight * (float trainingGraph.Size)
+                    )
 
                 // create spin model and train
                 let spin = new Liquid.Spin(projector :: couplings, trainingGraph.Size, Liquid.RunMode.Trotter1X)
@@ -109,46 +133,39 @@ type SimpleControlledTrainer
                 
 
                 // extract trained control probabilities
-                let controlProbabilities = [
-                    for edge in trainingGraph.Edges ->
-                        let control = edge.GetControl
-                        let results = MeasurementStatistics spin.Ket ((trainingGraph.WhichQubits control))
-                        let weights = Interactions.Sets.InterpretControlMeasurement results control
+                [ for edge in trainingGraph.Edges ->
+                    let control = edge.GetControl
+                    let results = MeasurementStatistics spin.Ket ((trainingGraph.WhichQubits control))
+                    let weights = InterpretControlMeasurement results control
 
-                        dumps (sprintf "un-normalized interaction probabilities for edge %A" edge.StripControl)
-                        weights ||> dump |> ignore
+                    dumps (sprintf "un-normalized interaction probabilities for edge %A" edge.StripControl)
+                    weights ||> dump |> ignore
 
-                        weights
+                    weights
                 ]
-                
-                controlProbabilities
             )
-            |> (fun res ->
-                let yes = res.[0]
-                let no = res.[1]
+            |> (fun (yes, no) ->
+                // both yes and no are lists of probabilities, one entry per edge, of elements ["interaction1", weight1; "interaction2", weight2; ...]
+                let max = List.concat >> List.maxBy snd >> snd
+                let min = List.concat >> List.minBy snd >> snd
+                // normalize weights to [0, 1]
+                let maxYes = max yes
+                let maxNo = max no
 
-                // normalize weights to [-1, 1]
-                let minYes = yes |> List.concat |> List.minBy snd |> snd
-                let maxYes = yes |> List.concat |> List.maxBy snd |> snd
-                let minNo = no |> List.concat |> List.minBy snd |> snd
-                let maxNo = no |> List.concat |> List.maxBy snd |> snd
-
-                let yesNormalizer = if (maxYes - minYes) <> 0.0 then fun v -> (v - minYes) / (maxYes - minYes) else id
-                let noNormalizer = if (maxNo - minNo) <> 0.0 then fun v -> (v - minNo) / (maxNo - minNo) else id
+                let yesNormalizer = if maxYes <> 0.0 then fun v -> v / maxYes else id
+                let noNormalizer = if maxNo <> 0.0 then fun v -> v / maxNo else id
 
                 // for every edge, assemble list of interaction name * strength
-                let noDict = no ||> Map.ofList
-                let addedWeights = [
-                    for edge in 0..yes.Length-1 ->
-                    [
-                        for (name, yesWeight) in yes.[edge] do
-                            let noWeight = noDict.[edge].[name]
-                            yield name, (yesNormalizer yesWeight) - (noNormalizer noWeight)
-                    ]
-                ] 
+                let addedWeights =
+                    List.zip yes no
+                    ||> fun (y, n) ->
+                            List.zip3 (fst <|| y) (snd <|| y) (snd <|| n)
+                    |||> fun (name, yesWeight, noWeight) -> 
+                            // this line determins how the yes and no weights are interpreted and combined to form one single interaction weight
+                            name, (yesNormalizer yesWeight) - (noNormalizer noWeight)
 
                 // normalize weights to [-1, 1]
-                let weightsMax = addedWeights |> List.concat |> List.maxBy snd |> snd
+                let weightsMax = System.Math.Max(max addedWeights, min addedWeights)
                 [ for edge in addedWeights -> [ for interaction in edge -> fst(interaction), snd(interaction) / weightsMax ] ]               
             )
 
@@ -177,7 +194,12 @@ type SimpleControlledTrainer
             let couplings = [
                 for p in parameters ->
                     let (edge, name, strength) = p
-                    Liquid.SpinTerm(1, interactions.Interaction name, graph.WhichQubits edge, strength)
+                    Liquid.SpinTerm(
+                        s = 1,
+                        o = interactions.Interaction name,
+                        idx = graph.WhichQubits edge,
+                        a = strength
+                    )
             ]
 
             let spin = new Liquid.Spin(couplings, graph.Size, Liquid.RunMode.Trotter1X)
