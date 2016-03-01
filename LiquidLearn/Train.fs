@@ -22,7 +22,7 @@ let InterpretControlMeasurement (results : float list) (control : Graph.VertexT)
     // sum control identity probabilities
     let control =
         match results |> List.take controlCount |> List.sum with
-        | 0.0 -> 1.0
+        | 0.0 -> failwith "cannot determine interaction strength, as control qubit has zero weight"
         | v -> v
 
     let results = results |> List.skip controlCount |> normalize ||> ( fun v -> v / control )        
@@ -44,7 +44,7 @@ type TestResults = {
     member this.ToFile (filename, ?append) =
         let append = defaultArg append false
         if append then
-            System.IO.File.AppendAllText(filename, this.TableForm)
+            System.IO.File.AppendAllText(filename, "\n" + this.TableForm)
         else
             System.IO.File.WriteAllText(filename, this.TableForm)
 
@@ -121,11 +121,11 @@ type SimpleControlledTrainer
                     repeats = 20,
                     trotter = trotter,
                     schedule = [
-                        0,     [|1.00; 0.00; 0.00|];
+                        0,    [|1.00; 0.00; 0.00|];
                         50,   [|1.00; 0.25; 0.00|];
                         200,  [|0.00; 1.00; 1.00|]
                     ],
-                    res = 50,
+                    res = 40,
                     spin = spin,
                     runonce = true,
                     decohereModel = []
@@ -206,12 +206,13 @@ type SimpleControlledTrainer
             Liquid.Spin.Test(
                 tag = "test",
                 repeats = 20,
-                trotter = 20,
+                trotter = trotter,
                 schedule = [
-                    0,    [|1.0; 0.0|];
-                    200,  [|0.0; 1.0|]
+                    0,    [|1.00; 0.00; 0.00|];
+                    50,   [|1.00; 0.25; 0.00|];
+                    200,  [|0.00; 1.00; 1.00|]
                 ],
-                res = 50,
+                res = 40,
                 spin = spin,
                 runonce = true,
                 decohereModel = []

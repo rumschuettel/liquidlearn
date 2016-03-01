@@ -103,7 +103,7 @@ let ControlledInteraction name (matrices : (float -> Liquid.CSMat) list) theta (
     (new Liquid.Gate(
         Name = "QuditControl",
         Draw = (
-            let numberOfControls = nextPowerOf2 (matrices.Length + 1) |> log2 |> ceil |> int
+            let numberOfControls = nextPowerOf2 (matrices.Length + 1) |> log2 |> round |> int
             let numberOfQubits = singleMatrixSize |> log2 |> round |> int
             let controlString = join "" [ for i in 0..numberOfControls-1 -> sprintf "\\qwx[#%d]\\go[#%d]\\control" i i ]
             controlString + (sprintf "\qwx[#%d]\\go[#%d]\\multigate{#%d}{%s}" (numberOfControls+numberOfQubits-1) numberOfControls (numberOfControls+numberOfQubits-1) name )
@@ -167,7 +167,7 @@ module Sets =
 
     // Compressed Random Matrices
     // set of 5 random sparse Hermitian matrices
-    // These are 2-local 3-qubit interactions or 1-local 2-qubit
+    // These are 2-local 3-qubit interactions or 2-local 2-qubit
     type CompressedRandom() =
         inherit IInteractionFactory()
 
@@ -178,14 +178,14 @@ module Sets =
 
     // Compressed History State Matrices
     // set of 5 special matrices from History state constructions
-    // These are 2-local 3-qubit interactions
+    // These are 2-local 3-qubit interactions or 2-local 2-qubit
     type CompressedHistory() =
         inherit IInteractionFactory()
+        let NamesRegex = System.Text.RegularExpressions.Regex("[1x]+$")
 
         override this.GateName list = sprintf "%d CHistory" list.Length
 
         override this.Names n =
-            match n with
-            | 3 -> GeneratedCode.UniversalHistoryCompressed.List
-            | _ -> failwith "universal history matrices only computed for edge size 3"
+            let foo = GeneratedCode.UniversalHistoryCompressed.List |> List.filter (fun name -> NamesRegex.Match(name).Length = n)
+            foo
         override this.Matrix name = GeneratedCode.UniversalHistoryCompressed.Get name
