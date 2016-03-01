@@ -15,17 +15,18 @@ let MeasurementStatistics (ket : Liquid.Ket) (qubits : int list) =
 
 
 
- 
+[<StructuredFormatDisplay("TestResults {TableForm}")>]
 type TestResults = {
         YesStats : (float*float) list
         NoStats  : (float*float) list
 }  with
-    override this.ToString() =
+    member this.TableForm =
         join "" (
-            [ for (e, sigma) in this.YesStats -> sprintf "y\t%.2e\t%.2e\n" e sigma ]
+            [ for (e, sigma) in this.YesStats -> sprintf "\ny\t%.2e\t%.2e" e sigma ]
             @
-            [ for (e, sigma) in this.NoStats -> sprintf "n\t%.2e\t%.2e\n" e sigma ]
+            [ for (e, sigma) in this.NoStats -> sprintf "\nn\t%.2e\t%.2e" e sigma ]
         )
+
     member this.ToFile (filename, ?append) =
         let append = defaultArg append false
         if append then
@@ -51,19 +52,23 @@ type SimpleControlledTrainer
     let trainingGraph = graph.AddControls ( fun edge ->
         if trainOnQudits then
             [{
-                id = randomString 5;
+                id = uniqueID;
                 interactions = interactions.ListPossibleInteractions edge
             }]
         else
             [ for interaction in interactions.ListPossibleInteractions edge ->
               {
-                id = randomString 5;
+                id = uniqueID;
                 interactions = [interaction]
             }]
-    ) 
-    do 
+    )
+
+    do
+        Dumps "SimpleControlledTrainer"
+        dump graph
+        dumps "augmented"
         dump trainingGraph
-        dump [ for e in trainingGraph.Edges -> trainingGraph.WhichQubits e ]
+        dumps (sprintf "with interaction set %A" interactions)
 
     // interactions to train
     let couplings = [
@@ -72,7 +77,7 @@ type SimpleControlledTrainer
     ]
 
     let mutable parameters = None
-    member this.Train (data : Dataset) =
+    member this.Train (data : DataSet) =
         // run training once for YES and once for NO-instances
         // result format is
         // yes instances : [ for all edges : [("interaction1", strength); ...]; [...]; ...];
@@ -80,13 +85,13 @@ type SimpleControlledTrainer
         let results =
             [("YES", data.YesInstances, -1.0); ("NO", data.NoInstances, 1.0)]
             ||>
-            ( fun (tag, data : Dataset, weight) ->
+            ( fun (tag, data : DataSet, weight) ->
                 // projector on training data. Interaction strength scaled to be dominating term
-                dump (data.ValuatedList weight)
-                let projector = Liquid.SpinTerm(2, Interactions.Projector (data.ValuatedList weight), trainingGraph.WhichQubits trainingGraph.Outputs, 10. * (float trainingGraph.Size))
+                dumps (sprintf "training with weight %.2f on %A" weight data)
+                let projector = new Liquid.SpinTerm(2, Interactions.Projector (data.ValuatedList weight), trainingGraph.WhichQubits trainingGraph.Outputs, 10. * (float trainingGraph.Size))
 
                 // create spin model and train
-                let spin = Liquid.Spin(projector :: couplings, trainingGraph.Size, Liquid.RunMode.Trotter1X)
+                let spin = new Liquid.Spin(projector :: couplings, trainingGraph.Size, Liquid.RunMode.Trotter1X)
                 Liquid.Spin.Test(
                     tag = "train " + tag,
                     repeats = 20,
@@ -108,10 +113,14 @@ type SimpleControlledTrainer
                     for edge in trainingGraph.Edges ->
                         let control = edge.GetControl
                         let results = MeasurementStatistics spin.Ket ((trainingGraph.WhichQubits control))
-                        Interactions.Sets.InterpretControlMeasurement results control
+                        let weights = Interactions.Sets.InterpretControlMeasurement results control
+
+                        dumps (sprintf "un-normalized interaction probabilities for edge %A" edge.StripControl)
+                        weights ||> dump |> ignore
+
+                        weights
                 ]
                 
-                dump controlProbabilities
                 controlProbabilities
             )
             |> (fun res ->
@@ -155,11 +164,12 @@ type SimpleControlledTrainer
             )
             |> List.concat
         )
-        dump parameters
+        dumps "trained interaction parameters"
+        parameters.Value ||> dump |> ignore
         
         this
  
-    member this.Test (data : Dataset) =
+    member this.Test (data : DataSet) =
         match parameters with
         | None -> failwith "model not trained"
         | Some parameters ->
@@ -170,7 +180,7 @@ type SimpleControlledTrainer
                     Liquid.SpinTerm(1, interactions.Interaction name, graph.WhichQubits edge, strength)
             ]
 
-            let spin = Liquid.Spin(couplings, graph.Size, Liquid.RunMode.Trotter1X)
+            let spin = new Liquid.Spin(couplings, graph.Size, Liquid.RunMode.Trotter1X)
             Liquid.Spin.Test(
                 tag = "test",
                 repeats = 20,
@@ -189,12 +199,11 @@ type SimpleControlledTrainer
             let qubits = state.Qubits
             let outputs = graph.WhichQubits graph.Outputs // list of qubits that act as output qubits
  
-            // set part of state vector that is not output to |0> + |1>, so that we trace out the hidden part
+            // set part of state vector that is not output to |0> + |1>, so that we partially trace out the hidden part
             [ for i in 0..graph.Size-1 -> i ] |> List.map (fun i ->
                 if not (contains i outputs) then
                     qubits.[i].StateSet(1., 0., 1., 0.)
             ) |> ignore
-            state.Dump Liquid.Util.showInd
 
             let updateStateData (data : DataT) =
                 [ for i in 0..outputs.Length-1 -> i ] |> List.map (fun i ->
@@ -218,9 +227,4 @@ type SimpleControlledTrainer
 
             { YesStats = yesStats; NoStats = noStats }
 
-        
-        // extract trained controls
-        //dump !!(spin.Ket.Qubits, trainingGraph.Controls)
-        //let controls = MeasurementStatistics spin.Ket trainingGraph.Controls
-        //dump controls*)
 end

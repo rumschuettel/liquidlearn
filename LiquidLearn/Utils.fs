@@ -56,30 +56,39 @@ let log2 n = System.Math.Log(float n, 2.0)
 let nextPowerOf2 n = 2.0**(log2 n |> ceil) |> round |> int
 
 // dump function
-let dump sth = printfn "%A" sth
+let dumpsWithColor color sth =
+    let oldColor = System.Console.ForegroundColor
+    System.Console.ForegroundColor <- color
+    printfn "%s" sth
+    System.Console.ForegroundColor <- oldColor
+let Dumps = dumpsWithColor System.ConsoleColor.DarkMagenta
+let dumps = dumpsWithColor System.ConsoleColor.White
+let dump sth =
+    dumps (sprintf "%A" sth)
 
-// random string
-let randomString = 
-    let chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWUXYZ0123456789"
-    let charsLen = chars.Length
-    let random = System.Random()
-
-    fun len -> 
-        let randomChars = [|for i in 0..len -> chars.[random.Next(charsLen)]|]
-        new System.String(randomChars)
-
+// unique incrementing id
+let mutable internal _uniqueIDCounter = 0
+let uniqueID =
+    _uniqueIDCounter <- _uniqueIDCounter + 1
+    string _uniqueIDCounter
 
 // input and output data specification
 module Data =
     type BitT = Zero=0 | One=1
-    type StateT = BitT list
-    type DataT = BitT list
+    type StateT = BitT list        
+    type DataT = StateT
 
-    type Dataset =
+    [<StructuredFormatDisplay("DataSet {TableForm}")>]
+    type DataSet =
         {
             Yes : DataT list
             No  : DataT list
         }
+        member this.TableForm =
+            "\nyes: " + (join ", " (this.Yes |||> int |||> string ||> join "" ||> sprintf "%s")) +
+            "\nno:  " + (join ", " (this.No  |||> int |||> string ||> join "" ||> sprintf "%s"))
+
+
         member this.ValuatedList (weight : float) =
             [ for y in this.Yes -> (-weight, y) ] @ [ for n in this.No -> (weight, n)]
         member this.YesInstances = { Yes = this.Yes; No = [] }

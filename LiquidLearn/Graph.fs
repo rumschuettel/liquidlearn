@@ -4,11 +4,18 @@ module LiquidLearn.Graph
 open Utils
 
 // recursive vertex type
+[<StructuredFormatDisplay("{DisplayForm}")>]
 type VertexT =
     | V of string
     | O of string
     | C of ControlT
     with
+    member this.DisplayForm =
+        match this with
+        | V v -> v
+        | O o -> "*" + o
+        | C c -> sprintf "c%s (%d)" c.id c.interactions.Length
+
     member this.IsControl =
         match this with
         | C _ -> true
@@ -24,15 +31,17 @@ type VertexT =
         match this with
         | C c -> System.Math.Log(float c.interactions.Length + 1.0, 2.0) |> ceil |> int
         | _ -> 1
-
 and ControlT = {
     id : string
     interactions : string list // control vertex stores a list of interaction identifiers
 }
 
 // edge as a vertex list
+[<StructuredFormatDisplay("({DisplayForm})")>]
 type EdgeT = | EdgeT of VertexT list
     with
+    member this.DisplayForm = join " --- " (this.Vertices ||> sprintf "%A")
+
     member this.Vertices = match this with | EdgeT vertices -> vertices
 
     // true if edge has a controlled vertex
@@ -79,7 +88,7 @@ let inline (---) a b =
     |> EdgeT
 
 
-
+[<StructuredFormatDisplay("Hypergraph {DisplayForm}")>]
 type Hypergraph(edges : EdgeT list) = class
     // put edges in correct order, extract unique vertices, outputs and controls
     let edges = [for e in edges -> e.NormalOrder]
@@ -103,15 +112,15 @@ type Hypergraph(edges : EdgeT list) = class
         |> Map.ofList   
     let qubitCount = ((Map.toList qubitLookupTable) ||> snd |> List.concat |> List.max) + 1
 
-    do dump qubitLookupTable
-
-
     member this.WhichQubits (vertex : VertexT) = qubitLookupTable.[vertex]
     member this.WhichQubits (vertices : VertexT list) = vertices ||> this.WhichQubits |> List.concat
     member this.WhichQubits (edge : EdgeT) = edge.Vertices |> this.WhichQubits
 
-    // prints out the hypergraph structure
-    override this.ToString() = sprintf "vertices:\n%A\nedges:\n%A" vertices edges
+    member this.DisplayForm =
+        join "" (
+            "\nvertices: " :: (List.zip vertices (vertices ||> this.WhichQubits) ||> sprintf "%A ") @
+            "\nedges:    " :: (edges ||> sprintf "%A ")
+        )
 
     // vertices and edges
     member this.Edges = edges

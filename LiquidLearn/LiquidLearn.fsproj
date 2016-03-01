@@ -56,6 +56,7 @@
     <Compile Include="Utils.fs" />
     <Compile Include="Graph.fs" />
     <Compile Include="ProjectorGates.fs" />
+    <Compile Include="CompressedRandomGates.fs" />
     <Compile Include="CompressedProjectorGates.fs" />
     <Compile Include="PauliGates.fs" />
     <Compile Include="Interactions.fs" />

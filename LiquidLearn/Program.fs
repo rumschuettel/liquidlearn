@@ -54,7 +54,7 @@ module LearnApp =
             ||||> FromString
             ||> fun sets -> { Yes = sets.[0]; No = sets.[1] }
 
-        dump data
+        data ||> dump |> ignore
 
         let edges = [ O"1" --- O"2" ]
         let graph = new Hypergraph(edges)
@@ -62,11 +62,11 @@ module LearnApp =
 
         data
             ||> fun data ->
-                let trained = model.Train data
-                let results = model.Test data
-                results.ToFile ("benchmark2.test", append = true)
-                results
-            |> dump
+                    let trained = model.Train data
+                    let results = model.Test data
+                    results.ToFile ("benchmark2.test", append = true)
+                    results
+            ||> dump |> ignore
         ()
 
 

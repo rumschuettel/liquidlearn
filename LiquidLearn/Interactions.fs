@@ -126,7 +126,6 @@ module Sets =
             | 0.0 -> 1.0
             | v -> v
 
-        dump results
         let results = results |> List.skip controlCount |> normalize ||> ( fun v -> v / control )        
         List.zip interactions results
 
