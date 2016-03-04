@@ -1,15 +1,14 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
-<Project ToolsVersion="14.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+<Project ToolsVersion="4.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
   <PropertyGroup>
     <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
     <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
-    <SchemaVersion>2.0</SchemaVersion>
-    <ProjectGuid>a174e331-8cd3-4808-a888-d136055eba1a</ProjectGuid>
+    <ProjectGuid>{A174E331-8CD3-4808-A888-D136055EBA1A}</ProjectGuid>
     <OutputType>Exe</OutputType>
     <RootNamespace>LiquidLearn</RootNamespace>
     <AssemblyName>LiquidLearn</AssemblyName>
-    <TargetFrameworkVersion>v4.6</TargetFrameworkVersion>
+    <TargetFrameworkVersion>v4.5</TargetFrameworkVersion>
     <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
     <TargetFSharpCoreVersion>4.4.0.0</TargetFSharpCoreVersion>
     <Name>LiquidLearn</Name>
@@ -27,6 +26,7 @@
     <DocumentationFile>bin\Debug\LiquidLearn.XML</DocumentationFile>
     <Prefer32Bit>false</Prefer32Bit>
     <StartArguments>Benchmark()</StartArguments>
+    <Commandlineparameters>Benchmark()</Commandlineparameters>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
     <DebugType>pdbonly</DebugType>
@@ -38,18 +38,19 @@
     <PlatformTarget>AnyCPU</PlatformTarget>
     <DocumentationFile>bin\Release\LiquidLearn.XML</DocumentationFile>
     <Prefer32Bit>true</Prefer32Bit>
+    <Commandlineparameters>Benchmark()</Commandlineparameters>
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="Liquid1">
-      <HintPath>..\..\..\..\..\..\Liquid\bin\Liquid1.dll</HintPath>
+      <HintPath>..\..\Liquid\linux\Liquid1.dll</HintPath>
     </Reference>
     <Reference Include="mscorlib" />
-    <Reference Include="FSharp.Core, Version=$(TargetFSharpCoreVersion), Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a">
-      <Private>True</Private>
-    </Reference>
     <Reference Include="System" />
     <Reference Include="System.Core" />
     <Reference Include="System.Numerics" />
+    <Reference Include="FSharp.Core">
+      <Private>True</Private>
+    </Reference>
   </ItemGroup>
   <ItemGroup>
     <Compile Include="AssemblyInfo.fs" />
