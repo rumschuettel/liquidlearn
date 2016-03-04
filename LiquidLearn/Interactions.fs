@@ -25,6 +25,19 @@ type Liquid.CSMat with
         
         Liquid.CSMat(totalSize, List.concat [thisEntries; otherEntries])
 
+    // basis permutation helpers
+    // Sig2State (Parse "011") = 3
+    static member Sig2State (signature : Data.DataT) = 
+        let signature = signature |> List.rev
+        [ for i in 0..signature.Length-1 -> if signature.[i] = Data.BitT.One then pown 2 i else 0 ] |> List.sum
+
+    // |001><010|
+    static member Rank1Projector (sigA, sigB, dim) =
+        let stateA, stateB = (sigA, sigB) ||> Sig2State
+        Liquid.CSMat(dim, [(stateA, stateB, 1., 0)])
+
+    static member RankNProjector (sigsA, 
+
 
 
 // create sets of gates used in the training algorithms
@@ -50,16 +63,11 @@ module Matrices =
 open Matrices
 
 let Projector (states : (float * Data.DataT) list) (theta : float) (qs : Liquid.Qubits) =
-    // state2pos (Parse "011") = 3
-    let state2pos (signature : Data.DataT) = 
-        let signature = signature |> List.rev
-        [ for i in 0..signature.Length-1 -> if signature.[i] = Data.BitT.One then pown 2 i else 0 ] |> List.sum
-
     // matrix size
     let count = snd(states.[0]).Length
     let size = pown 2 count
     // create diagonal
-    let entries = states ||> (fun arg -> (state2pos (snd arg), arg)) |> Map.ofList
+    let entries = states ||> (fun arg -> (Liquid.CSMat.Sig2State (snd arg), arg)) |> Map.ofList
     let diagonal =
         [
             for i in 0..size-1 ->
