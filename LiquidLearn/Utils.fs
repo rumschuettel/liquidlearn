@@ -36,7 +36,7 @@ let tuples n (list: 'a list) =
 // distribute element across list
 let rec distribute e = function
     | [] -> [[e]]
-    | x::xs' as xs -> (e::xs)::[for xs in distribute e xs' -> x::xs]
+    | x::xs' as xs -> (e::xs) :: [for xs in distribute e xs' -> x::xs]
 
 // all permutations of list
 let rec permute = function
@@ -44,16 +44,22 @@ let rec permute = function
     | e::xs -> List.collect (distribute e) (permute xs)
 
 
+// patterns
+let (|EmptySet|_|) (set : Set<'T>) = 
+    if set.IsEmpty then Some() else None
+
+
 // aliases, shortcuts and F# greatness
 let join = String.concat
 
 let inline (<||) f list = Seq.map f list |> Seq.toList
 
-type PipeForward = PipeForward with
-    static member inline ($) (PipeForward, list: 'a list) = fun f -> list |> List.map f
-    static member inline ($) (PipeForward, (a, b): 'a * 'a) = fun f -> [a; b] |> List.map f |> function | [a; b] -> (a, b) | _ -> failwith "does not happen"
+type PipeForwardT = PipeForwardT with
+    static member inline ($) (PipeForwardT, list: Set<'a>) = fun f -> list |> Set.map f
+    static member inline ($) (PipeForwardT, list: 'a list) = fun f -> list |> List.map f
+    static member inline ($) (PipeForwardT, (a, b): 'a * 'a) = fun f -> [a; b] |> List.map f |> function | [a; b] -> (a, b) | _ -> failwith "does not happen"
 
-let inline (||>) list f = (PipeForward $ list) f
+let inline (||>) list f = (PipeForwardT $ list) f
 let inline (|||>) listofLists f = listofLists ||> (fun list -> list ||> f)
 let inline (||||>) listofLists f = listofLists |||> (fun list -> list ||> f)
 

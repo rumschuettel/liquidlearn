@@ -26,17 +26,37 @@ type Liquid.CSMat with
         Liquid.CSMat(totalSize, List.concat [thisEntries; otherEntries])
 
     // basis permutation helpers
-    // Sig2State (Parse "011") = 3
+    // Sig2State (FromString "011") = 3
     static member Sig2State (signature : Data.DataT) = 
         let signature = signature |> List.rev
         [ for i in 0..signature.Length-1 -> if signature.[i] = Data.BitT.One then pown 2 i else 0 ] |> List.sum
 
     // |001><010|
-    static member Rank1Projector (sigA, sigB, dim) =
-        let stateA, stateB = (sigA, sigB) ||> Sig2State
-        Liquid.CSMat(dim, [(stateA, stateB, 1., 0)])
+    static member Rank1Projector dim (sigA, sigB) =
+        let stateA, stateB = (sigA, sigB) ||> Liquid.CSMat.Sig2State
+        Liquid.CSMat(dim, [(stateA, stateB, 1., 0.)])
 
-    static member RankNProjector (sigsA, 
+    static member RankNProjector dim (sigs : (Data.DataT * Data.DataT) list) =
+        sigs
+            ||> Liquid.CSMat.Rank1Projector dim
+            ||> fun m -> m.Dense()
+            |> List.reduce (fun acc m -> acc.Add(m); acc)
+            |> Liquid.CSMat
+
+    static member BasisPermutationMatrix permutation systems =
+        let basis = [Data.BitT.Zero; Data.BitT.One] |> tuples systems
+        let permutedBasis = basis ||> List.permute permutation
+
+        Liquid.CSMat.RankNProjector (pown 2 systems) (List.zip basis permutedBasis)
+
+    // permutation of basis
+    member this.PermuteBasis permutation =
+        if (log2 this.Length) % 1.0 <> 0.0 then failwith "not a power of 2 matrix size"
+        let systems = log2 this.Length |> round |> int
+        let permutationMatrix = Liquid.CSMat.BasisPermutationMatrix permutation systems
+
+        permutationMatrix.Adj().Mul(this).Mul(permutationMatrix)
+
 
 
 
@@ -126,8 +146,8 @@ module Sets =
     // Interaction base class
     [<AbstractClass>]
     type IInteractionFactory() =
-        // give back gate name for a list of interaction ids
-        abstract member GateName : string list -> string
+        // give back gate name for a list of interactions
+        abstract member GateName : Graph.InteractionT list -> string
         // give a complete list of possible interactions for an edge of given size
         abstract member Names : int -> string list
         // for any id returned by Names, this function has to return a valid matrix
@@ -137,12 +157,12 @@ module Sets =
         member this.ListPossibleInteractions (edge : Graph.EdgeT) =
             this.Names edge.Size
 
-        member this.Interaction name =
-            MatrixInteraction name (this.Matrix name)
+        member this.Interaction (interaction : Graph.InteractionT) =
+            MatrixInteraction interaction.name (this.Matrix interaction.name)
 
         member this.ControlledInteraction (edge : Graph.EdgeT) =
             let interactions = edge.GetControl.Unwrap.interactions
-            let matrices = [ for name in interactions -> this.Matrix name ]
+            let matrices = [ for interaction in interactions -> this.Matrix interaction.name ]
             ControlledInteraction (this.GateName interactions) matrices
 
     // Pauli matrix products
@@ -151,7 +171,7 @@ module Sets =
 
         override this.GateName list = sprintf "%d Paulis" list.Length
 
-        override this.Names n = [ for name in tuples n ['0'; '3'; '2'] -> string (new System.String(Seq.toArray name)) ]
+        override this.Names n = [ for name in tuples n ['0'; '1'; '2'; '3'] -> string (new System.String(Seq.toArray name)) ]
         override this.Matrix name = GeneratedCode.PauliProductMatrices.Get name
 
     // Projectors
@@ -172,6 +192,8 @@ module Sets =
 
         override this.Names n = GeneratedCode.Rank1CompressedProjectionMatrices.List |> List.filter (fun name -> name.Length = n)
         override this.Matrix name = GeneratedCode.Rank1CompressedProjectionMatrices.Get name
+
+    // F# computed compressed projectors
 
     // Compressed Random Matrices
     // set of 5 random sparse Hermitian matrices

@@ -29,22 +29,22 @@ let InterpretControlMeasurement (results : float list) (control : Graph.VertexT)
     List.zip interactions results
 
 
-[<StructuredFormatDisplay("TestResults {TableForm} \n")>]
+[<StructuredFormatDisplay("TestResults {TableForm}")>]
 type TestResults = {
         YesStats : (float*float) list
         NoStats  : (float*float) list
 }  with
     member this.TableForm =
-        join "\n" (
-            [ for (e, sigma) in this.YesStats -> sprintf "y\t%.2e\t%.2e" e sigma ]
+        join "" (
+            [ for (e, sigma) in this.YesStats -> sprintf "\ny\t%.2e\t%.2e" e sigma ]
             @
-            [ for (e, sigma) in this.NoStats -> sprintf "n\t%.2e\t%.2e" e sigma ]
+            [ for (e, sigma) in this.NoStats -> sprintf "\nn\t%.2e\t%.2e" e sigma ]
         )
 
     member this.ToFile (filename, ?append) =
         let append = defaultArg append false
         if append then
-            System.IO.File.AppendAllText(filename, "\n" + this.TableForm)
+            System.IO.File.AppendAllText(filename, this.TableForm)
         else
             System.IO.File.WriteAllText(filename, this.TableForm)
 
@@ -66,13 +66,22 @@ type SimpleControlledTrainer
         if trainOnQudits then
             [{
                 id = uniqueID;
-                interactions = interactions.ListPossibleInteractions edge
+                interactions =
+                [ for name in interactions.ListPossibleInteractions edge ->
+                  {
+                    name = name;
+                    vertices = edge.NormalOrder
+                }]
             }]
         else
-            [ for interaction in interactions.ListPossibleInteractions edge ->
+            [ for name in interactions.ListPossibleInteractions edge ->
               {
                 id = uniqueID;
-                interactions = [interaction]
+                interactions =
+                [{
+                    name = name;
+                    vertices = edge.NormalOrder
+                }]
             }]
     )
 

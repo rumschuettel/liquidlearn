@@ -42,7 +42,7 @@ module LearnApp =
         // create all possible training sets
         let data =
             ["0"; "1"]
-            |> tuples 3 // all possible data tuples
+            |> tuples 2 // all possible data tuples
             |> permute // and all possible permutations of these datasets
             ||> splitYesNo // create all possible training sets
             |||> Set.ofList // delete all duplicates, e.g. yes and no swapped, order of data in yes or no
@@ -57,9 +57,9 @@ module LearnApp =
 
         data ||> dump |> ignore
 
-        let edges = [ O"1" --- O"2" --- O"3" ]
+        let edges = [ O"1" --- O"2" ]
         let graph = new Hypergraph(edges)
-        let model = new SimpleControlledTrainer(graph, Sets.CompressedHistory(), trainOnQudits = true)
+        let model = new SimpleControlledTrainer(graph, Sets.Projectors(), trainOnQudits = true)
 
         data
             ||> fun data ->

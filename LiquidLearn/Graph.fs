@@ -33,55 +33,63 @@ type VertexT =
         | _ -> 1
 and ControlT = {
     id : string
-    interactions : string list // control vertex stores a list of interaction identifiers
+    interactions : InteractionT list // control vertex stores a list of interaction identifiers
+}
+and InteractionT = {
+    name : string
+    vertices : VertexT list
 }
 
 // edge as a vertex list
 [<StructuredFormatDisplay("({DisplayForm})")>]
-type EdgeT = | EdgeT of VertexT list
+type EdgeT = EdgeT of Set<VertexT>
     with
-    member this.DisplayForm = join " --- " (this.Vertices ||> sprintf "%A")
+    member this.DisplayForm = join " --- " (this.NormalOrder ||> sprintf "%A")
 
     member this.Vertices = match this with | EdgeT vertices -> vertices
 
     // true if edge has a controlled vertex
     member this.IsControlled =
-        match List.tryFind (fun (vertex : VertexT) -> vertex.IsControl) this.Vertices with
-        | Some _ -> true
-        | None -> false
+        Set.exists (fun (vertex : VertexT) -> vertex.IsControl) this.Vertices
 
     // get control interaction
     member this.GetControl =
-        match List.tryFind (fun (vertex : VertexT) -> vertex.IsControl) this.Vertices with
-        | Some (C control) -> C control
-        | _ -> failwith "edge has no control vertex"
+        match Set.filter (fun (vertex : VertexT) -> vertex.IsControl) this.Vertices |> Set.toList with
+        | [] -> failwith "edge has no control vertex"
+        | [c] -> c
+        | _ -> failwith "edge has more than one control vertex"
 
     // strip control interaction
     member this.StripControl =
         this.Vertices
-        |> List.filter (fun vertex -> not vertex.IsControl)
-        |> EdgeT
+            |> Set.filter (fun vertex -> not vertex.IsControl)
+            |> EdgeT
 
 
-    // put the control vertex to however controlled interactions are created
+    // put the control vertex into normal order:
+    // put controls to however controlled interactions are created,
+    // i.e. in this case at the beginning, meaning that the control should be in the upper left block of any matrix
+    // note that this does not mean that the control qubits have to be the first vertices of a graph
     member this.NormalOrder =
-        EdgeT (Seq.sortBy (fun vertex ->
-            match vertex with
-            | C _ -> 0
-            | _ -> 1
-        ) this.Vertices |> Seq.toList)
+        this.Vertices
+            |> Set.toList
+            |> List.sortBy (fun vertex ->
+                    match vertex with
+                    | C _ -> 0
+                    | _ -> 1
+                )
 
-    member this.Size = this.Vertices.Length
+    member this.Size = this.Vertices.Count
 
 
 // F# does not support overloading non-tuple operators
 let inline (---) a b = 
     (
         match box a, box b with
-        | (:? EdgeT as a), (:? EdgeT as b) -> [a.Vertices; b.Vertices] |> List.concat
-        | (:? VertexT as a), (:? EdgeT as b) -> [[a]; b.Vertices] |> List.concat
-        | (:? EdgeT as a), (:? VertexT as b) -> [a.Vertices; [b]] |> List.concat
-        | (:? VertexT as a), (:? VertexT as b) -> [a; b]
+        | (:? EdgeT as a), (:? EdgeT as b) -> Set.union a.Vertices b.Vertices
+        | (:? VertexT as a), (:? EdgeT as b) -> b.Vertices.Add a
+        | (:? EdgeT as a), (:? VertexT as b) -> a.Vertices.Add b
+        | (:? VertexT as a), (:? VertexT as b) -> Set.ofList [a; b]
         | _ -> failwith "not a valid hyperedge type"
     )
     ||> unbox<VertexT>
@@ -90,9 +98,8 @@ let inline (---) a b =
 
 [<StructuredFormatDisplay("Hypergraph {DisplayForm}")>]
 type Hypergraph(edges : EdgeT list) = class
-    // put edges in correct order, extract unique vertices, outputs and controls
-    let edges = [for e in edges -> e.NormalOrder]
-    let vertices = [for e in edges -> e.Vertices] |> List.concat |> Set.ofList |> Set.toList
+    // extract unique vertices and put into list for unique ordering, outputs and controls
+    let vertices = [for e in edges -> e.Vertices] |> Set.unionMany |> Set.toList
     let outputs = vertices |> List.filter (function O _ -> true | _ -> false)
     let controls = vertices |> List.filter (function C _ -> true | _ -> false)
 
@@ -112,9 +119,12 @@ type Hypergraph(edges : EdgeT list) = class
         |> Map.ofList   
     let qubitCount = ((Map.toList qubitLookupTable) ||> snd |> List.concat |> List.max) + 1
 
+    // allows to look up a unique qubit for vertices or an edge
+    // the edge qubits are normal-ordered, as edges are sets where a control can have a specific position which we want to be unambiguous
+    // the vertex list is unordered, so that the qubits for a; b are 0; 1 but for b; a it's 1; 0
     member this.WhichQubits (vertex : VertexT) = qubitLookupTable.[vertex]
     member this.WhichQubits (vertices : VertexT list) = vertices ||> this.WhichQubits |> List.concat
-    member this.WhichQubits (edge : EdgeT) = edge.Vertices |> this.WhichQubits
+    member this.WhichQubits (edge : EdgeT) = edge.NormalOrder |> this.WhichQubits
 
     member this.DisplayForm =
         join "" (
@@ -129,8 +139,8 @@ type Hypergraph(edges : EdgeT list) = class
     member this.Controls = controls
     member this.Size = qubitCount
     
-    // return graph where either every or only some hyperedges are extended by one or more control vertices
-    // we are not yet checking whether the graph is already controlled
+    // return graph where every hyperedge is extended by a control vertex
+    // we are not checking whether the graph is already controlled
     member this.AddControls (f : EdgeT -> ControlT list) =
         new Hypergraph
             ([
@@ -139,6 +149,8 @@ type Hypergraph(edges : EdgeT list) = class
                         yield C control --- e
             ])
 
-
+    // return an optimized graph
+    member this.OptimizeControls (maxControlledInteractions : int) (maxControlledVertices : int) =
+        ()
 end
 
