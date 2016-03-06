@@ -36,9 +36,9 @@ type TestResults = {
 }  with
     member this.TableForm =
         join "" (
-            [ for (e, sigma) in this.YesStats -> sprintf "\ny\t%.2e\t%.2e" e sigma ]
+            [ for (e, sigma) in this.YesStats -> sprintf "\n  y\t%.2e\t%.2e" e sigma ]
             @
-            [ for (e, sigma) in this.NoStats -> sprintf "\nn\t%.2e\t%.2e" e sigma ]
+            [ for (e, sigma) in this.NoStats -> sprintf "\n  n\t%.2e\t%.2e" e sigma ]
         )
 
     member this.ToFile (filename, ?append) =
@@ -55,42 +55,34 @@ type SimpleControlledTrainer
     (
         graph : Graph.Hypergraph,
         interactions : Interactions.Sets.IInteractionFactory,
-        ?trainOnQudits : bool,
+        ?trainOnQudits : int,
+        ?maxVertices : int,
         ?trotter : int
     ) = class
-    let trainOnQudits = defaultArg trainOnQudits false
+    let trainOnQudits = defaultArg trainOnQudits 2
+    let maxVertices = defaultArg maxVertices 3
     let trotter = defaultArg trotter 20
-
-    // create controlled version of graph
-    let trainingGraph = graph.AddControls ( fun edge ->
-        if trainOnQudits then
-            [{
-                id = uniqueID;
-                interactions =
-                [ for name in interactions.ListPossibleInteractions edge ->
-                  {
-                    name = name;
-                    vertices = edge.NormalOrder
-                }]
-            }]
-        else
-            [ for name in interactions.ListPossibleInteractions edge ->
-              {
-                id = uniqueID;
-                interactions =
-                [{
-                    name = name;
-                    vertices = edge.NormalOrder
-                }]
-            }]
-    )
 
     do
         Dumps "Simple Controlled Qubit Trainer"
-        dumps (sprintf "trainOnQudits=%s, trotter=%d" (if trainOnQudits then "yes" else "no") trotter)
+        dumps (sprintf "trainOnQudits=%s, trotter=%d" (if trainOnQudits > 1 then (sprintf "yes, %d" trainOnQudits) else "no") trotter)
         dump graph
-        dumps "training on"
-        dump trainingGraph
+
+    // create controlled version of graph
+    let trainingGraph =
+        (graph.AddControls ( fun edge ->
+        // for now, every edge gets one control with all possible interactions on that edge
+            [{
+                id = uniqueID
+                interactions = interactions.ListPossibleInteractions edge
+            }]
+        )).OptimizeControls(
+            maxInteractions = (pown 2 trainOnQudits) - 1,
+            maxVertices = maxVertices
+        )   
+
+    do
+        dumps (sprintf "training on %A" trainingGraph)
         dumps (sprintf "with interaction set %A" interactions)
 
     // interactions to train

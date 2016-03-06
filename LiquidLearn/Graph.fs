@@ -37,7 +37,7 @@ and ControlT = {
 }
 and InteractionT = {
     name : string
-    vertices : VertexT list
+    vertices : VertexT list // order matters
 }
 
 // edge as a vertex list
@@ -66,20 +66,24 @@ type EdgeT = EdgeT of Set<VertexT>
             |> EdgeT
 
 
-    // put the control vertex into normal order:
+    // put the control vertex into unique normal order:
     // put controls to however controlled interactions are created,
     // i.e. in this case at the beginning, meaning that the control should be in the upper left block of any matrix
     // note that this does not mean that the control qubits have to be the first vertices of a graph
     member this.NormalOrder =
         this.Vertices
-            |> Set.toList
-            |> List.sortBy (fun vertex ->
+            |> Set.toSeq
+            |> Seq.sort
+            |> Seq.sortBy (fun vertex ->
                     match vertex with
                     | C _ -> 0
                     | _ -> 1
                 )
+            |> Seq.toList
 
     member this.Size = this.Vertices.Count
+
+    member this.Subsets = powerset this.NormalOrder |> Seq.groupBy (fun el -> el.Length) |> Seq.toList ||> snd
 
 
 // F# does not support overloading non-tuple operators
@@ -128,8 +132,8 @@ type Hypergraph(edges : EdgeT list) = class
 
     member this.DisplayForm =
         join "" (
-            "\nvertices: " :: (List.zip vertices (vertices ||> this.WhichQubits) ||> sprintf "%A ") @
-            "\nedges:    " :: (edges ||> sprintf "%A ")
+            "\n  vertices: " :: (List.zip vertices (vertices ||> this.WhichQubits) ||> sprintf "%A ") @
+            "\n  edges:    " :: (edges ||> sprintf "%A ")
         )
 
     // vertices and edges
@@ -150,7 +154,79 @@ type Hypergraph(edges : EdgeT list) = class
             ])
 
     // return an optimized graph
-    member this.OptimizeControls (maxControlledInteractions : int) (maxControlledVertices : int) =
-        ()
+    member this.OptimizeControls (maxInteractions : int, maxVertices : int) =
+        // this is a variant of integer list partitioning, which is known to be NP-hard
+        // we use a poly-time greedy approximation, known to lie within 7/6 of the optimal solution
+        let interactions =
+            this.Controls
+            ||> fun control -> control.Unwrap.interactions
+            |> List.concat
+
+        // count vertices in interaction sequence
+        let countInteractions interactions =
+            interactions
+            ||> fun el -> el.vertices
+            |> Seq.concat
+            |> Set.ofSeq
+            |> Set.count
+
+        // gives a score of adding the interaction to an array
+        let score (interaction : InteractionT) (list : InteractionT list) =
+            // too many interactions in partition
+            if list.Length >= maxInteractions then None
+            // fill up empty arrays first, only if there's no way of adding an interaction to a list without increasing its score
+            elif list.Length = 0 then Some 1
+            // score is difference in unique vertex count
+            else
+                let before = countInteractions list
+                let after  = countInteractions (interaction :: list)
+                Some (after - before)
+
+        // try distributing the interactions to a partition of size n
+        let rec tryPartition = function
+            | n when n <= 0 || n > interactions.Length -> failwith "invalid partition parameters"
+            | n ->
+                let partition : InteractionT list [] = [| for i in 1..n -> [] |]
+
+                let rec tryDistribute = function
+                    | [] -> true
+                    | interaction::tail ->
+                        // find all scores for adding interaction to each possible urn
+                        let scores = score interaction <|| partition
+
+                        if scores |> Array.forall (fun score -> score = None) then false
+                        else
+                            let minScore =
+                                scores
+                                |> Array.filter (function None -> false | _ -> true)
+                                |> Array.min
+
+                            // add to the item with lowest score
+                            let minScoreIndex = scores |> Array.findIndex (fun s -> s = minScore)
+                            partition.[minScoreIndex] <- interaction :: partition.[minScoreIndex]
+                            tryDistribute tail
+                
+                match tryDistribute interactions with
+                | true ->
+                    dumps (sprintf "try OptimizeControls with %d bins: OK" n)
+                    partition
+                | false ->
+                    dumps (sprintf "try OptimizeControls with %d bins: fail" n)
+                    tryPartition (n+1)
+        
+        // build new graph with optimized interactions
+        new Hypergraph
+            ([
+                for part in tryPartition 1 ->
+                    let edge =
+                        part
+                        ||> (fun interaction -> interaction.vertices)
+                        |> List.concat
+                        |> Set.ofList
+                        |> EdgeT
+
+                    C { id=uniqueID; interactions=part } --- edge
+            ])
+
 end
 

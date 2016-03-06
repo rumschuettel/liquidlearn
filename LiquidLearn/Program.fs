@@ -22,14 +22,14 @@ module LearnApp =
         }
         let edges = [ O"1" --- O"2" --- O"3"; ]
         let graph = new Hypergraph(edges)
-        let model = new SimpleControlledTrainer(graph, Sets.CompressedProjectors(), trainOnQudits = true)
+        let model = new SimpleControlledTrainer(graph, Sets.Projectors(), trainOnQudits = 2)
         let trained = model.Train data
         
         let results = model.Test {
             Yes = (FromString <|| ["001"; "111"; "010"; "100";])
             No  = (FromString <|| ["000"; "110"; "011"; "101"])
         }
-        printfn "%s" (string results)
+        dump results
         results.ToFile "model2.test"
         ()
 
@@ -43,7 +43,7 @@ module LearnApp =
         let data =
             ["0"; "1"]
             |> tuples 2 // all possible data tuples
-            |> permute // and all possible permutations of these datasets
+            |> permutations // and all possible permutations of these datasets
             ||> splitYesNo // create all possible training sets
             |||> Set.ofList // delete all duplicates, e.g. yes and no swapped, order of data in yes or no
             ||> Set.ofList
@@ -59,7 +59,7 @@ module LearnApp =
 
         let edges = [ O"1" --- O"2" ]
         let graph = new Hypergraph(edges)
-        let model = new SimpleControlledTrainer(graph, Sets.Projectors(), trainOnQudits = true)
+        let model = new SimpleControlledTrainer(graph, Sets.Projectors(), trainOnQudits = 2)
 
         data
             ||> fun data ->

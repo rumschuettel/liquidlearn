@@ -1,6 +1,25 @@
 ﻿// LiquidLearn (c) 2016 Johannes Bausch
 module LiquidLearn.Utils
 
+
+// aliases, shortcuts and F# greatness
+let join = String.concat
+
+
+type PipeForwardT = PipeForwardT with
+    static member inline ($) (PipeForwardT, list: seq<'a>) = fun f -> list |> Seq.map f
+    static member inline ($) (PipeForwardT, list: 'a []) = fun f -> list |> Array.map f
+    static member inline ($) (PipeForwardT, list: Set<'a>) = fun f -> list |> Set.map f
+    static member inline ($) (PipeForwardT, list: 'a list) = fun f -> list |> List.map f
+    static member inline ($) (PipeForwardT, (a, b): 'a * 'a) = fun f -> [a; b] |> List.map f |> function | [a; b] -> (a, b) | _ -> failwith "does not happen"
+
+let inline (||>) list f = (PipeForwardT $ list) f
+let inline (|||>) listofLists f = listofLists ||> (fun list -> list ||> f)
+let inline (||||>) listofListsofLists f = listofListsofLists |||> (fun listofLists -> listofLists ||> f)
+
+let inline (<||) f list = list ||> f
+
+
 // check if list contains a
 let contains a list = List.exists (fun element -> element = a) list
 
@@ -39,29 +58,46 @@ let rec distribute e = function
     | x::xs' as xs -> (e::xs) :: [for xs in distribute e xs' -> x::xs]
 
 // all permutations of list
-let rec permute = function
+let rec permutations = function
     | [] -> [[]]
-    | e::xs -> List.collect (distribute e) (permute xs)
+    | e::xs -> List.collect (distribute e) (permutations xs)
+
+// get permutation function mapping a to b
+let getPermutation (l1 : 'a list) (l2 : 'a list) : int -> int =
+    if l1.Length <> l2.Length then failwith "no permutation found"
+    if l1.Length = 0 then id
+    else
+        let matrix = [|for i in 0..l1.Length-1 -> [|for j in 0..l2.Length-1 -> l1.[i] = l2.[j]|]|]
+        for i = 0 to matrix.Length-1 do
+            for j = i+1 to matrix.Length-1 do
+                // for all rows after i that are identical, delete the first 'true'
+               if matrix.[i] = matrix.[j] then
+                    match Array.tryFindIndex id matrix.[j] with
+                    | None -> failwith "no permutation found"
+                    | Some n -> 
+                        matrix.[j].[n] <- false
+
+        let lookup =
+            matrix
+            ||> Array.tryFindIndex id
+            ||> function Some n -> n | None -> failwith "no permutation found"
+
+        function n when ((0 <= n) && (n < lookup.Length)) -> lookup.[n] | n -> n
+            
+// powerset
+let rec powerset list = 
+  seq {
+    match list with
+    | [] -> yield []
+    | h::t -> for x in powerset t do yield! [x; h::x]
+  }
+
 
 
 // patterns
 let (|EmptySet|_|) (set : Set<'T>) = 
     if set.IsEmpty then Some() else None
 
-
-// aliases, shortcuts and F# greatness
-let join = String.concat
-
-let inline (<||) f list = Seq.map f list |> Seq.toList
-
-type PipeForwardT = PipeForwardT with
-    static member inline ($) (PipeForwardT, list: Set<'a>) = fun f -> list |> Set.map f
-    static member inline ($) (PipeForwardT, list: 'a list) = fun f -> list |> List.map f
-    static member inline ($) (PipeForwardT, (a, b): 'a * 'a) = fun f -> [a; b] |> List.map f |> function | [a; b] -> (a, b) | _ -> failwith "does not happen"
-
-let inline (||>) list f = (PipeForwardT $ list) f
-let inline (|||>) listofLists f = listofLists ||> (fun list -> list ||> f)
-let inline (||||>) listofLists f = listofLists |||> (fun list -> list ||> f)
 
 // math stuff
 let log2 n = System.Math.Log(float n, 2.0)
@@ -97,8 +133,8 @@ module Data =
             No  : DataT list
         }
         member this.TableForm =
-            "\nyes: " + (join ", " (this.Yes |||> int |||> string ||> join "" ||> sprintf "%s")) +
-            "\nno:  " + (join ", " (this.No  |||> int |||> string ||> join "" ||> sprintf "%s"))
+            "\n  yes: " + (join ", " (this.Yes |||> int |||> string ||> join "" ||> sprintf "%s")) +
+            "\n  no:  " + (join ", " (this.No  |||> int |||> string ||> join "" ||> sprintf "%s"))
 
 
         member this.ValuatedList (weight : float) =
