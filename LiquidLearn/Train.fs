@@ -19,13 +19,16 @@ let InterpretControlMeasurement (results : float list) (control : Graph.VertexT)
     let interactions = control.Unwrap.interactions
     let controlSlots = nextPowerOf2 (interactions.Length + 1)
     let controlCount = (controlSlots - interactions.Length)
-    // sum control identity probabilities
-    let control =
-        match results |> List.take controlCount |> List.sum with
-        | 0.0 -> failwith "cannot determine interaction strength, as control qubit has zero weight"
-        | v -> v
 
-    let results = results |> List.skip controlCount |> normalize ||> ( fun v -> v / control )        
+    // neutral offset: if all probabilities on 2 qubits are 0.25, 0.25, 0.25, 0.25 then it's neither positive or negative
+    // and we return 0, 0, 0, 0; for 3 qubits it'd be 0.125 etc.
+    let neutralOffset = 1.0 / (float results.Length)
+
+    let results =
+        results
+        |> List.skip controlCount
+        ||> (fun prob -> prob - neutralOffset)
+
     List.zip interactions results
 
 

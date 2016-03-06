@@ -38,6 +38,9 @@ let normalizeBy f list =
     | _ -> list |> List.map (fun v -> v / max)
 let normalize list = normalizeBy List.max list
 
+// clamp list
+let clamp a b list = list |> List.map (fun v -> if v > b then b elif v < a then a else v)
+
 // cartesian product of a sequence of sequences
 let rec cartesian (lists : 'a list list) = 
     let f0 a = function

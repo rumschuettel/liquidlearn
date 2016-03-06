@@ -208,10 +208,10 @@ type Hypergraph(edges : EdgeT list) = class
                 
                 match tryDistribute interactions with
                 | true ->
-                    dumps (sprintf "try OptimizeControls with %d bins: OK" n)
+                    dumps (sprintf "try OptimizeControls with %d bin%s: OK" n (if n = 1 then "" else "s"))
                     partition
                 | false ->
-                    dumps (sprintf "try OptimizeControls with %d bins: fail" n)
+                    dumps (sprintf "try OptimizeControls with %d bin%s: fail" n (if n = 1 then "" else "s"))
                     tryPartition (n+1)
         
         // build new graph with optimized interactions

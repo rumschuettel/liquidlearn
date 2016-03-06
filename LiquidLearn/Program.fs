@@ -30,7 +30,7 @@ module LearnApp =
             No  = (FromString <|| ["000"; "110"; "011"; "101"])
         }
         dump results
-        results.ToFile "model2.test"
+        results.ToFile ("model3.test", append=false)
         ()
 
     [<LQD>]
