@@ -219,27 +219,31 @@ module Sets =
         override this.Names n = [ for name in tuples n ['0'; '1'] -> string (new System.String(Seq.toArray name)), n ]
         override this.Matrix name = GeneratedCode.Rank1ProjectionMatrices.Get name
 
-(*    // Compressed Random Matrices
+    // Compressed Random Matrices
     // set of 5 random sparse Hermitian matrices
     // These are 2-local 3-qubit interactions or 2-local 2-qubit
-    type CompressedRandom() =
+    type Random() =
         inherit IInteractionFactory()
 
-        override this.GateName list = sprintf "%d CRandom" list.Length
-
-        override this.Names n = GeneratedCode.RandomHermitianCompressed.List |> List.filter (fun name -> name.Length = n+1)
-        override this.Matrix name = GeneratedCode.RandomHermitianCompressed.Get name
-
-    // Compressed History State Matrices
-    // set of 5 special matrices from History state constructions
-    // These are 2-local 3-qubit interactions or 2-local 2-qubit
-    type CompressedHistory() =
-        inherit IInteractionFactory()
-        let NamesRegex = System.Text.RegularExpressions.Regex("[1x]+$")
-
-        override this.GateName list = sprintf "%d CHistory" list.Length
+        override this.GateName list = sprintf "%d Random" list.Length
 
         override this.Names n =
-            let foo = GeneratedCode.UniversalHistoryCompressed.List |> List.filter (fun name -> NamesRegex.Match(name).Length = n)
-            foo
-        override this.Matrix name = GeneratedCode.UniversalHistoryCompressed.Get name*)
+            match n with
+            | n when n >= 2 -> GeneratedCode.SparseRandomHermitian.List ||> fun name -> name, 2
+            | _ -> failwith "History State matrices are 2-local"
+
+        override this.Matrix name = GeneratedCode.SparseRandomHermitian.Get name
+
+    // History State Matrices
+    // set of 5 special matrices from History state constructions, all 2-local
+    type History() =
+        inherit IInteractionFactory()
+
+        override this.GateName list = sprintf "%d History" list.Length
+
+        override this.Names n =
+            match n with
+            | n when n >= 2 -> GeneratedCode.UniversalHistory.List ||> fun name -> name, 2
+            | _ -> failwith "History State matrices are 2-local"
+
+        override this.Matrix name = GeneratedCode.UniversalHistory.Get name

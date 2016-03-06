@@ -20,9 +20,9 @@ module LearnApp =
             Yes = (FromString <|| ["001"; "111"])
             No  = (FromString <|| ["000"; "101"; "110"])
         }
-        let edges = [ O"1" --- O"2" --- O"3"; ]
+        let edges = [ O"1" --- O"2"; O"2" --- O"3"; ]
         let graph = new Hypergraph(edges)
-        let model = new SimpleControlledTrainer(graph, Sets.Projectors(), trainOnQudits = 2)
+        let model = new SimpleControlledTrainer(graph, Sets.History(), trainOnQudits = 4)
         let trained = model.Train data
         
         let results = model.Test {
@@ -59,7 +59,7 @@ module LearnApp =
 
         let edges = [ O"1" --- O"2" ]
         let graph = new Hypergraph(edges)
-        let model = new SimpleControlledTrainer(graph, Sets.Projectors(), trainOnQudits = 2)
+        let model = new SimpleControlledTrainer(graph, Sets.Random(), trainOnQudits = 2)
 
         data
             ||> fun data ->

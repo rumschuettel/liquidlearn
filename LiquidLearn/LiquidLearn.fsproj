@@ -26,7 +26,7 @@
     <PlatformTarget>x64</PlatformTarget>
     <DocumentationFile>bin\Debug\LiquidLearn.XML</DocumentationFile>
     <Prefer32Bit>false</Prefer32Bit>
-    <StartArguments>Learn()</StartArguments>
+    <StartArguments>Benchmark()</StartArguments>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
     <DebugType>pdbonly</DebugType>
@@ -57,9 +57,8 @@
     <Compile Include="Graph.fs" />
     <Compile Include="ProjectorGates.fs" />
     <Compile Include="PauliGates.fs" />
-    <Compile Include="CompressedRandomGates.fs" />
-    <Compile Include="CompressedProjectorGates.fs" />
-    <Compile Include="CompressedHistoryGates.fs" />
+    <Compile Include="RandomGates.fs" />
+    <Compile Include="HistoryGates.fs" />
     <Compile Include="Interactions.fs" />
     <Compile Include="Train.fs" />
     <Compile Include="Program.fs" />
