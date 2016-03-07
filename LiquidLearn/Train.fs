@@ -100,6 +100,11 @@ type SimpleControlledTrainer
     ]
 
     let mutable parameters = None
+
+    // return size of training graph
+    member this.Size = trainingGraph.Size
+
+    // train dataset
     member this.Train (data : DataSet, ?dataProjectorWeight : float) =
         let dataProjectorWeight = defaultArg dataProjectorWeight 10.
         // run training once for YES and once for NO-instances

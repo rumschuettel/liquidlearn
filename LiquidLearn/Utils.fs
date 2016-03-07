@@ -4,6 +4,7 @@ module LiquidLearn.Utils
 
 // aliases, shortcuts and F# greatness
 let join = String.concat
+let rand = new System.Random()
 
 
 type PipeForwardT = PipeForwardT with
@@ -18,6 +19,18 @@ let inline (|||>) listofLists f = listofLists ||> (fun list -> list ||> f)
 let inline (||||>) listofListsofLists f = listofListsofLists |||> (fun listofLists -> listofLists ||> f)
 
 let inline (<||) f list = list ||> f
+
+
+// shuffle array
+let shuffle a =
+    let swap (a: _[]) x y =
+        let tmp = a.[x]
+        a.[x] <- a.[y]
+        a.[y] <- tmp
+
+    Array.iteri (fun i _ -> swap a i (rand.Next(i, Array.length a))) a
+    a
+
 
 
 // check if list contains a
@@ -41,7 +54,7 @@ let normalize list = normalizeBy List.max list
 // clamp list
 let clamp a b list = list |> List.map (fun v -> if v > b then b elif v < a then a else v)
 
-// cartesian product of a sequence of sequences
+// cartesian product of a list of lists
 let rec cartesian (lists : 'a list list) = 
     let f0 a = function
         | [] -> [[a]]
@@ -122,6 +135,7 @@ let mutable internal _uniqueIDCounter = 0
 let uniqueID =
     _uniqueIDCounter <- _uniqueIDCounter + 1
     string _uniqueIDCounter
+
 
 // input and output data specification
 module Data =

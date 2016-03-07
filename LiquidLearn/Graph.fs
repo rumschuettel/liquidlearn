@@ -136,6 +136,8 @@ type Hypergraph(edges : EdgeT list) = class
             "\n  edges:    " :: (edges ||> sprintf "%A ")
         )
 
+    member this.ShortForm = sprintf "%dV%dEx%x" vertices.Length edges.Length ((hash this) % 16*16)
+
     // vertices and edges
     member this.Edges = edges
     member this.Vertices = vertices
@@ -160,10 +162,13 @@ type Hypergraph(edges : EdgeT list) = class
         let interactions =
             this.Controls
             ||> fun control -> control.Unwrap.interactions
+            |> Array.ofList
+            |> shuffle
+            |> Array.toList
             |> List.concat
 
         // count vertices in interaction sequence
-        let countInteractions interactions =
+        let countVertices interactions =
             interactions
             ||> fun el -> el.vertices
             |> Seq.concat
@@ -178,8 +183,8 @@ type Hypergraph(edges : EdgeT list) = class
             elif list.Length = 0 then Some 1
             // score is difference in unique vertex count
             else
-                let before = countInteractions list
-                let after  = countInteractions (interaction :: list)
+                let before = countVertices list
+                let after  = countVertices (interaction :: list)
                 Some (after - before)
 
         // try distributing the interactions to a partition of size n
@@ -191,6 +196,7 @@ type Hypergraph(edges : EdgeT list) = class
                 let rec tryDistribute = function
                     | [] -> true
                     | interaction::tail ->
+                        shuffle partition |> ignore
                         // find all scores for adding interaction to each possible urn
                         let scores = score interaction <|| partition
 
@@ -213,6 +219,9 @@ type Hypergraph(edges : EdgeT list) = class
                 | false ->
                     dumps (sprintf "try OptimizeControls with %d bin%s: fail" n (if n = 1 then "" else "s"))
                     tryPartition (n+1)
+
+        // create partition and even out imbalances
+        let partition = tryPartition 1
         
         // build new graph with optimized interactions
         new Hypergraph

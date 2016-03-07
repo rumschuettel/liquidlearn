@@ -13,6 +13,71 @@ module LearnApp =
 
     open Util
     open System
+    open System.IO
+    open System.Diagnostics
+
+    // splits list in two
+    let SplitYesNo (list : 'a list) = [List.take (list.Length/2) list; List.skip (list.Length/2) list]
+
+    // all possible data sets
+    let AllDataSets n =
+        ["0"; "1"]
+            |> tuples n // all possible data tuples
+            |> permutations // and all possible permutations of these datasets
+            ||> SplitYesNo // create all possible training sets
+            |||> Set.ofList // delete all duplicates, e.g. yes and no swapped, order of data in yes or no (training being symmetric)
+            ||> Set.ofList
+            |> Set.ofList
+            |> Set.toList
+            ||> Set.toList
+            |||> Set.toList
+            ||||> join ""
+            ||||> FromString
+            ||> fun sets -> { Yes = sets.[0]; No = sets.[1] }
+
+    let Run(datasets : (DataSet * DataSet) list, edges : EdgeT list, interactions : Sets.IInteractionFactory list) =
+        let graph = new Hypergraph(edges)
+
+        // iterate over all interaction sets
+        for interaction in interactions do
+            let filename = sprintf "data-%d-graph-%s-int-%s" datasets.Length graph.ShortForm interaction.ShortForm
+            if not <| File.Exists(filename + ".stats") then
+                if File.Exists(filename + ".test") then File.Delete(filename + ".test")
+
+                let stopwatch = Stopwatch.StartNew()
+
+                let model = new SimpleControlledTrainer(graph, interaction, trainOnQudits = 4, maxVertices = 4)
+                let timeModelCreated = stopwatch.ElapsedMilliseconds
+               
+                if model.Size > 18 then
+                    File.WriteAllText(filename + ".fail", sprintf "too many qubits needed: %d" model.Size)
+                else
+                    // run model for every training set
+                    datasets
+                        ||> fun (train, test) ->
+                                let results = (model.Train train).Test test
+                                results.ToFile(filename + ".test", append = true)
+                                results
+                        ||> dump |> ignore
+                    let timeDone = stopwatch.ElapsedMilliseconds
+
+                    // write stats file
+                    File.WriteAllText(filename + ".stats", sprintf "timeModelCreated %d\ntimeDone %d\n\n%A\n\n%A\n\n%A" timeModelCreated timeDone graph interaction datasets)
+
+                            
+
+
+    [<LQD>]
+    let MSRSubmissionData() =
+        let runs : ((DataSet*DataSet) list * EdgeT list * Sets.IInteractionFactory list) list = [
+            List.zip (AllDataSets 2) (AllDataSets 2), [ O"1" --- O"2" ], [Sets.Projectors(); Sets.Paulis(); Sets.History(); Sets.Random()]
+            List.zip (AllDataSets 2) (AllDataSets 2), [ O"1" --- V"h"; V"h" --- O"2" ], [Sets.Projectors(); Sets.Paulis(); Sets.History(); Sets.Random()]
+            List.zip (AllDataSets 3) (AllDataSets 3), [ O"1" --- V"h"; V"h" --- O"2"; V"h" --- O"3" ], [Sets.Projectors(); Sets.Paulis(); Sets.History(); Sets.Random()]
+        ]
+
+        runs ||> Run |> ignore
+
+        ()
 
     [<LQD>]
     let Learn() =
@@ -36,30 +101,15 @@ module LearnApp =
     [<LQD>]
     let Benchmark() =
         Dumps "Training Benchmark Mode"
-        // splits list in two
-        let splitYesNo (list : 'a list) = [List.take (list.Length/2) list; List.skip (list.Length/2) list]
 
         // create all possible training sets
-        let data =
-            ["0"; "1"]
-            |> tuples 2 // all possible data tuples
-            |> permutations // and all possible permutations of these datasets
-            ||> splitYesNo // create all possible training sets
-            |||> Set.ofList // delete all duplicates, e.g. yes and no swapped, order of data in yes or no
-            ||> Set.ofList
-            |> Set.ofList
-            |> Set.toList
-            ||> Set.toList
-            |||> Set.toList
-            ||||> join ""
-            ||||> FromString
-            ||> fun sets -> { Yes = sets.[0]; No = sets.[1] }
+        let data = AllDataSets 2
 
         data ||> dump |> ignore
 
         let edges = [ O"1" --- O"2" ]
         let graph = new Hypergraph(edges)
-        let model = new SimpleControlledTrainer(graph, Sets.Random(), trainOnQudits = 2)
+        let model = new SimpleControlledTrainer(graph, Sets.Projectors(), trainOnQudits = 2)
 
         data
             ||> fun data ->

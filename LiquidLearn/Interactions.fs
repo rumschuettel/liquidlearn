@@ -149,7 +149,9 @@ module Sets =
 
     // Interaction base class
     [<AbstractClass>]
+    [<StructuredFormatDisplay("{ShortForm}")>]
     type IInteractionFactory() =
+        abstract member ShortForm : string
         // give back gate name for a list of interactions
         abstract member GateName : Graph.InteractionT list -> string
         // give a complete list of possible interactions * number of qubits it acts on
@@ -204,6 +206,7 @@ module Sets =
     // Pauli matrix products
     type Paulis() =
         inherit IInteractionFactory()
+        override this.ShortForm = "Paulis"
 
         override this.GateName list = sprintf "%d Paulis" list.Length
 
@@ -213,6 +216,8 @@ module Sets =
     // Projectors
     type Projectors() =
         inherit IInteractionFactory()
+
+        override this.ShortForm = "Projectors"
 
         override this.GateName list = sprintf "%d Projectors" list.Length
 
@@ -224,6 +229,8 @@ module Sets =
     // These are 2-local 3-qubit interactions or 2-local 2-qubit
     type Random() =
         inherit IInteractionFactory()
+
+        override this.ShortForm = "Random"
 
         override this.GateName list = sprintf "%d Random" list.Length
 
@@ -238,6 +245,8 @@ module Sets =
     // set of 5 special matrices from History state constructions, all 2-local
     type History() =
         inherit IInteractionFactory()
+
+        override this.ShortForm = "History"
 
         override this.GateName list = sprintf "%d History" list.Length
 
