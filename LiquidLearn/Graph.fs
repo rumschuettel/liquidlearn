@@ -74,11 +74,7 @@ type EdgeT = EdgeT of Set<VertexT>
         this.Vertices
             |> Set.toSeq
             |> Seq.sort
-            |> Seq.sortBy (fun vertex ->
-                    match vertex with
-                    | C _ -> 0
-                    | _ -> 1
-                )
+            |> Seq.sortBy (function C _ -> 0 | _ -> 1)
             |> Seq.toList
 
     member this.Size = this.Vertices.Count
@@ -136,7 +132,7 @@ type Hypergraph(edges : EdgeT list) = class
             "\n  edges:    " :: (edges ||> sprintf "%A ")
         )
 
-    member this.ShortForm = sprintf "%dV%dEx%x" vertices.Length edges.Length ((hash this) % 16*16)
+    member this.ShortForm = sprintf "%dV%dEx%x" vertices.Length edges.Length ((hash edges) % 16*16*16)
 
     // vertices and edges
     member this.Edges = edges
@@ -220,9 +216,7 @@ type Hypergraph(edges : EdgeT list) = class
                     dumps (sprintf "try OptimizeControls with %d bin%s: fail" n (if n = 1 then "" else "s"))
                     tryPartition (n+1)
 
-        // create partition and even out imbalances
-        let partition = tryPartition 1
-        
+     
         // build new graph with optimized interactions
         new Hypergraph
             ([

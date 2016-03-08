@@ -26,7 +26,7 @@
     <PlatformTarget>x64</PlatformTarget>
     <DocumentationFile>bin\Debug\LiquidLearn.XML</DocumentationFile>
     <Prefer32Bit>false</Prefer32Bit>
-    <StartArguments>MSRSubmissionData()</StartArguments>
+    <StartArguments>Learn()</StartArguments>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
     <DebugType>pdbonly</DebugType>
@@ -38,7 +38,7 @@
     <PlatformTarget>AnyCPU</PlatformTarget>
     <DocumentationFile>bin\Release\LiquidLearn.XML</DocumentationFile>
     <Prefer32Bit>true</Prefer32Bit>
-    <StartArguments>MSRSubmissionData()</StartArguments>
+    <StartArguments>Learn()</StartArguments>
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="Liquid1">

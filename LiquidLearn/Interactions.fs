@@ -100,6 +100,7 @@ let Projector (states : (float * Data.DataT) list) (theta : float) (qs : Liquid.
                 else
                     (i, i, 1.0, 0.0)
         ]
+
     // create new liquid gate and run
     (new Liquid.Gate(
         Name = "Projector",
@@ -188,7 +189,7 @@ module Sets =
 
         // simply gives back one matrix interaction for an interaction name
         member this.Interaction (interaction : Graph.InteractionT) =
-            MatrixInteraction interaction.name (this.Matrix interaction.name)
+            MatrixInteraction (sprintf "%s on %A" interaction.name interaction.vertices) (this.Matrix interaction.name)
 
         // gives back a big controlled interaction matrix for all the interactions in the edge.control.interactions list
         member this.ControlledInteraction (edge : Graph.EdgeT) =

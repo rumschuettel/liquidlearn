@@ -81,21 +81,18 @@ module LearnApp =
 
     [<LQD>]
     let Learn() =
-        let data = {
-            Yes = (FromString <|| ["001"; "111"])
-            No  = (FromString <|| ["000"; "101"; "110"])
-        }
-        let edges = [ O"1" --- O"2"; O"2" --- O"3"; ]
+        let data = [ { Yes = FromString <|| ["00"; "11"]; No = FromString <|| ["01"; "10"] } ]
+        let edges = [ O"1" --- V"h"; V"h" --- O"2"; ]
         let graph = new Hypergraph(edges)
-        let model = new SimpleControlledTrainer(graph, Sets.History(), trainOnQudits = 4)
-        let trained = model.Train data
-        
-        let results = model.Test {
-            Yes = (FromString <|| ["001"; "111"; "010"; "100";])
-            No  = (FromString <|| ["000"; "110"; "011"; "101"])
-        }
-        dump results
-        results.ToFile ("model3.test", append=false)
+        let model = new SimpleControlledTrainer(graph, Sets.Projectors(), trainOnQudits = 1, maxVertices = 4)
+
+        data
+            ||> fun d -> 
+                let trained = model.Train d
+                let results = model.Test d
+                Dump results
+            |> ignore
+
         ()
 
     [<LQD>]

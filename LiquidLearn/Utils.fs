@@ -127,6 +127,7 @@ let dumpsWithColor color sth =
     System.Console.ForegroundColor <- oldColor
 let Dumps = dumpsWithColor System.ConsoleColor.DarkMagenta
 let dumps = dumpsWithColor System.ConsoleColor.White
+let Dump sth = dumpsWithColor System.ConsoleColor.Yellow (sprintf "%A" sth)
 let dump sth =
     dumps (sprintf "%A" sth)
 
@@ -154,8 +155,15 @@ module Data =
             "\n  no:  " + (join ", " (this.No  |||> int |||> string ||> join "" ||> sprintf "%s"))
 
 
-        member this.ValuatedList (weight : float) =
-            [ for y in this.Yes -> (-weight, y) ] @ [ for n in this.No -> (weight, n)]
+        member this.ValuatedList ((weightYes : float, weightNo : float), ?jitter) =
+            let jitter = defaultArg jitter 0.01 // randomize weights 1% by default
+            [
+                for y in this.Yes ->
+                    (weightYes * (jitter * rand.NextDouble() + (1.-jitter)), y)
+            ] @ [
+                for n in this.No ->
+                    (weightNo * (jitter * rand.NextDouble() + (1.-jitter)), n)
+            ]
         member this.YesInstances = { Yes = this.Yes; No = [] }
         member this.NoInstances = { Yes = []; No = this.No }
 

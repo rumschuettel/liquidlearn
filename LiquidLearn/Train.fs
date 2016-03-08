@@ -91,12 +91,19 @@ type SimpleControlledTrainer
     // interactions to train
     let couplings = [
         for edge in trainingGraph.Edges do
-            yield Liquid.SpinTerm(
-                s = 1,
+            yield new Liquid.SpinTerm(
+                s = 2,
                 o = interactions.ControlledInteraction edge,
                 idx = trainingGraph.WhichQubits edge,
                 a = 1.0
             )
+    ]
+
+    // annealing schedule
+    let schedule = [
+        0,    [|1.00; 0.00; 0.00|];
+        50,   [|1.00; 0.25; 0.00|];
+        200,  [|0.00; 1.00; 1.00|]
     ]
 
     let mutable parameters = None
@@ -110,14 +117,14 @@ type SimpleControlledTrainer
         // run training once for YES and once for NO-instances
 
         let results =
-            (("YES", data.YesInstances, -1.0), ("NO", data.NoInstances, 1.0))
+            (("YES", data, (1.0, -0.5)), ("NO", data, (-0.5, 1.0)))
             ||>
             ( fun (tag, data : DataSet, weight) ->
                 // projector on training data. Interaction strength scaled to be dominating term
-                dumps (sprintf "training %s (weight %.2f) using %A" tag weight data)
+                dumps (sprintf "training %s (weights %.2f, %.2f) using %A" tag (fst weight) (snd weight) data)
                 let projector =
-                    Liquid.SpinTerm(
-                        s = 2,
+                    new Liquid.SpinTerm(
+                        s = 1,
                         o = Interactions.Projector (data.ValuatedList weight),
                         idx = trainingGraph.WhichQubits trainingGraph.Outputs,
                         a = dataProjectorWeight * (float trainingGraph.Size)
@@ -129,11 +136,7 @@ type SimpleControlledTrainer
                     tag = "train " + tag,
                     repeats = 20,
                     trotter = trotter,
-                    schedule = [
-                        0,    [|1.00; 0.00; 0.00|];
-                        50,   [|1.00; 0.25; 0.00|];
-                        200,  [|0.00; 1.00; 1.00|]
-                    ],
+                    schedule = schedule,
                     res = 40,
                     spin = spin,
                     runonce = true,
@@ -201,12 +204,11 @@ type SimpleControlledTrainer
         | Some parameters ->
             // build interactions from previously trained model
             let couplings = [
-                for p in parameters ->
-                    let (edge, name, strength) = p
-                    Liquid.SpinTerm(
+                for (_, interaction, strength) in parameters ->
+                    new Liquid.SpinTerm(
                         s = 1,
-                        o = interactions.Interaction name,
-                        idx = graph.WhichQubits edge,
+                        o = interactions.Interaction interaction,
+                        idx = graph.WhichQubits interaction.vertices,
                         a = strength
                     )
             ]
@@ -216,18 +218,14 @@ type SimpleControlledTrainer
                 tag = "test",
                 repeats = 20,
                 trotter = trotter,
-                schedule = [
-                    0,    [|1.00; 0.00; 0.00|];
-                    50,   [|1.00; 0.25; 0.00|];
-                    200,  [|0.00; 1.00; 1.00|]
-                ],
+                schedule = schedule,
                 res = 40,
                 spin = spin,
                 runonce = true,
                 decohereModel = []
             )
 
-            let state = Liquid.Ket(graph.Size)
+            let state = new Liquid.Ket(graph.Size)
             let qubits = state.Qubits
             let outputs = graph.WhichQubits graph.Outputs // list of qubits that act as output qubits
  
