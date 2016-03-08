@@ -117,7 +117,7 @@ type SimpleControlledTrainer
         // run training once for YES and once for NO-instances
 
         let results =
-            (("YES", data, (1.0, -0.5)), ("NO", data, (-0.5, 1.0)))
+            (("YES", data, (1.0, -0.25)), ("NO", data, (-0.25, 1.0)))
             ||>
             ( fun (tag, data : DataSet, weight) ->
                 // projector on training data. Interaction strength scaled to be dominating term

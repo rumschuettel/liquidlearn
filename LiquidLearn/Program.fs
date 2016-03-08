@@ -81,8 +81,8 @@ module LearnApp =
 
     [<LQD>]
     let Learn() =
-        let data = [ { Yes = FromString <|| ["00"; "11"]; No = FromString <|| ["01"; "10"] } ]
-        let edges = [ O"1" --- V"h"; V"h" --- O"2"; ]
+        let data = AllDataSets 2
+        let edges = [ O"1" --- O"2"; ]
         let graph = new Hypergraph(edges)
         let model = new SimpleControlledTrainer(graph, Sets.Projectors(), trainOnQudits = 1, maxVertices = 4)
 

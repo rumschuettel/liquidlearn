@@ -156,7 +156,7 @@ module Data =
 
 
         member this.ValuatedList ((weightYes : float, weightNo : float), ?jitter) =
-            let jitter = defaultArg jitter 0.01 // randomize weights 1% by default
+            let jitter = defaultArg jitter 0.00 // do not randomize weights by default
             [
                 for y in this.Yes ->
                     (weightYes * (jitter * rand.NextDouble() + (1.-jitter)), y)
