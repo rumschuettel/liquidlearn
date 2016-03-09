@@ -81,10 +81,10 @@ module LearnApp =
 
     [<LQD>]
     let Learn() =
-        let data = AllDataSets 2
+        let data = List.take 1 (AllDataSets 2)
         let edges = [ O"1" --- O"2"; ]
         let graph = new Hypergraph(edges)
-        let model = new SimpleControlledTrainer(graph, Sets.Projectors(), trainOnQudits = 1, maxVertices = 4)
+        let model = new SimpleControlledTrainer(graph, Sets.Random(), trainOnQudits = 1, maxVertices = 4)
 
         data
             ||> fun d -> 

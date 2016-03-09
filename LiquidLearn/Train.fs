@@ -131,10 +131,10 @@ type SimpleControlledTrainer
                     )
 
                 // create spin model and train
-                let spin = new Liquid.Spin(projector :: couplings, trainingGraph.Size, Liquid.RunMode.Trotter1X)
+                let spin = new Liquid.Spin(projector :: couplings, trainingGraph.Size, Liquid.RunMode.Trotter2R)
                 Liquid.Spin.Test(
                     tag = "train " + tag,
-                    repeats = 20,
+                    repeats = 5,
                     trotter = trotter,
                     schedule = schedule,
                     res = 40,

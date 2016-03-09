@@ -133,6 +133,7 @@ let ControlledInteraction name (matrices : (float -> Liquid.CSMat) list) theta (
     // direct sum all matrices to 1 + m1+m2+...+mn
     let matrixSum = matrices |> List.fold (fun (bigmatrix : Liquid.CSMat) matrix -> bigmatrix.Plus matrix) identity
 
+
     (new Liquid.Gate(
         Name = "QuditControl",
         Draw = (
@@ -161,17 +162,7 @@ module Sets =
         // the size of the matrix has to be n qubits, where n is given to Names to yield the id.
         abstract member Matrix : string -> (float -> Liquid.CSMat)
 
-        member this.Matrix (edge : Graph.EdgeT) =
-            let whole = edge.StripControl.NormalOrder
-            let subsystems = edge.Subsets
-            [ for name, size in this.Names edge.Size do
-                yield! (
-                    let matrix = this.Matrix name
-                    [ for i in 1..size -> 1 ] @ [ for i in 1..whole.Length-size -> 0 ]
-                        |> permutations
-                        ||> fun el -> el
-                )
-            ]
+
 
         // for every edge, pass a list of interactions and the vertices within that edge
         // that the interaction is acting on nontrivially
@@ -211,7 +202,7 @@ module Sets =
 
         override this.GateName list = sprintf "%d Paulis" list.Length
 
-        override this.Names n = [ for name in tuples n ['0'; '1'; '2'; '3'] -> string (new System.String(Seq.toArray name)), n ]
+        override this.Names n = [ for name in tuples n ['1'; '2'] -> string (new System.String(Seq.toArray name)), n ]
         override this.Matrix name = GeneratedCode.PauliProductMatrices.Get name
 
     // Projectors
