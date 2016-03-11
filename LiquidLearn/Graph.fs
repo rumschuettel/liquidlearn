@@ -132,7 +132,7 @@ type Hypergraph(edges : EdgeT list) = class
             "\n  edges:    " :: (edges ||> sprintf "%A ")
         )
 
-    member this.ShortForm = sprintf "%dV%dEx%x" vertices.Length edges.Length ((hash edges) % 16*16*16)
+    member this.ShortForm = sprintf "%dV%dE-%x" vertices.Length edges.Length (abs(hash edges) % 16*16*16)
 
     // vertices and edges
     member this.Edges = edges
@@ -228,7 +228,7 @@ type Hypergraph(edges : EdgeT list) = class
                         |> Set.ofList
                         |> EdgeT
 
-                    C { id=uniqueID; interactions=part } --- edge
+                    C { id=UniqueID; interactions=part } --- edge
             ])
 
 end

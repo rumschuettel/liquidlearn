@@ -90,12 +90,12 @@ let Projector (states : (float * Data.DataT) list) (theta : float) (qs : Liquid.
     let count = snd(states.[0]).Length
     let size = pown 2 count
     // create diagonal
-    let entries = states ||> (fun arg -> (Liquid.CSMat.Sig2State (snd arg), arg)) |> Map.ofList
+    let entries = states ||> (fun (strength, state) -> (Liquid.CSMat.Sig2State state, strength)) |> Map.ofList
     let diagonal =
         [
             for i in 0..size-1 ->
                 if entries.ContainsKey i then
-                    let (strength, state) = entries.[i]
+                    let strength = entries.[i]
                     (i, i, Math.Cos(strength * theta), Math.Sin(strength * theta))
                 else
                     (i, i, 1.0, 0.0)

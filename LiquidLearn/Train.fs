@@ -60,15 +60,17 @@ type SimpleControlledTrainer
         interactions : Interactions.Sets.IInteractionFactory,
         ?trainOnQudits : int,
         ?maxVertices : int,
-        ?trotter : int
+        ?trotter : int,
+        ?resolution : int
     ) = class
     let trainOnQudits = defaultArg trainOnQudits 2
     let maxVertices = defaultArg maxVertices 3
     let trotter = defaultArg trotter 20
+    let resolution = defaultArg resolution 20
 
     do
         Dumps "Simple Controlled Qubit Trainer"
-        dumps (sprintf "trainOnQudits=%s, trotter=%d" (if trainOnQudits > 1 then (sprintf "yes, %d" trainOnQudits) else "no") trotter)
+        dumps (sprintf "trainOnQudits=%s, trotter=%d, steps=%d" (if trainOnQudits > 1 then (sprintf "yes, %d" trainOnQudits) else "no") trotter (12*resolution))
         dump graph
 
     // create controlled version of graph
@@ -76,7 +78,7 @@ type SimpleControlledTrainer
         (graph.AddControls ( fun edge ->
         // for now, every edge gets one control with all possible interactions on that edge
             [{
-                id = uniqueID
+                id = UniqueID
                 interactions = interactions.ListPossibleInteractions edge
             }]
         )).OptimizeControls(
@@ -101,9 +103,9 @@ type SimpleControlledTrainer
 
     // annealing schedule
     let schedule = [
-        0,    [|1.00; 0.00; 0.00|];
-        50,   [|1.00; 0.25; 0.00|];
-        200,  [|0.00; 1.00; 1.00|]
+        0,              [|1.00; 0.00; 0.00|];
+        2*resolution,   [|1.00; 0.25; 0.00|];
+        12*resolution,  [|0.00; 1.00; 1.00|]
     ]
 
     let mutable parameters = None
@@ -117,7 +119,7 @@ type SimpleControlledTrainer
         // run training once for YES and once for NO-instances
 
         let results =
-            (("YES", data, (1.0, -0.25)), ("NO", data, (-0.25, 1.0)))
+            (("YES", data, (1.0, -0.0)), ("NO", data, (-0.0, 1.0)))
             ||>
             ( fun (tag, data : DataSet, weight) ->
                 // projector on training data. Interaction strength scaled to be dominating term
@@ -131,13 +133,13 @@ type SimpleControlledTrainer
                     )
 
                 // create spin model and train
-                let spin = new Liquid.Spin(projector :: couplings, trainingGraph.Size, Liquid.RunMode.Trotter2R)
+                let spin = new Liquid.Spin(projector :: couplings, trainingGraph.Size, Liquid.RunMode.Trotter1X)
                 Liquid.Spin.Test(
                     tag = "train " + tag,
-                    repeats = 5,
+                    repeats = 20,
                     trotter = trotter,
                     schedule = schedule,
-                    res = 40,
+                    res = 3*resolution,
                     spin = spin,
                     runonce = true,
                     decohereModel = []
@@ -219,7 +221,7 @@ type SimpleControlledTrainer
                 repeats = 20,
                 trotter = trotter,
                 schedule = schedule,
-                res = 40,
+                res = 3*resolution,
                 spin = spin,
                 runonce = true,
                 decohereModel = []

@@ -40,13 +40,13 @@ module LearnApp =
 
         // iterate over all interaction sets
         for interaction in interactions do
-            let filename = sprintf "data-%d-graph-%s-int-%s" datasets.Length graph.ShortForm interaction.ShortForm
+            let filename = sprintf "data-%d-graph-%s-%s" datasets.Length graph.ShortForm interaction.ShortForm
             if not <| File.Exists(filename + ".stats") then
                 if File.Exists(filename + ".test") then File.Delete(filename + ".test")
 
                 let stopwatch = Stopwatch.StartNew()
 
-                let model = new SimpleControlledTrainer(graph, interaction, trainOnQudits = 4, maxVertices = 4)
+                let model = new SimpleControlledTrainer(graph, interaction, trainOnQudits = 4, maxVertices = 4, trotter = 25, resolution = 25)
                 let timeModelCreated = stopwatch.ElapsedMilliseconds
                
                 if model.Size > 18 then
@@ -58,7 +58,7 @@ module LearnApp =
                                 let results = (model.Train train).Test test
                                 results.ToFile(filename + ".test", append = true)
                                 results
-                        ||> dump |> ignore
+                        ||> Dump |> ignore
                     let timeDone = stopwatch.ElapsedMilliseconds
 
                     // write stats file
@@ -81,16 +81,17 @@ module LearnApp =
 
     [<LQD>]
     let Learn() =
-        let data = List.take 1 (AllDataSets 2)
+        let data = (AllDataSets 2)
         let edges = [ O"1" --- O"2"; ]
         let graph = new Hypergraph(edges)
-        let model = new SimpleControlledTrainer(graph, Sets.Random(), trainOnQudits = 1, maxVertices = 4)
+        let model = new SimpleControlledTrainer(graph, Sets.Random(), trainOnQudits = 4, maxVertices = 4)
 
         data
             ||> fun d -> 
                 let trained = model.Train d
                 let results = model.Test d
-                Dump results
+                results
+            |> Dump
             |> ignore
 
         ()
