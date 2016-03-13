@@ -185,7 +185,7 @@ type Hypergraph(edges : EdgeT list) = class
 
         // try distributing the interactions to a partition of size n
         let rec tryPartition = function
-            | n when n <= 0 || n > interactions.Length -> failwith "invalid partition parameters"
+            | n when n < 0 || n > interactions.Length -> failwith "invalid partition parameters"
             | n ->
                 let partition : InteractionT list [] = [| for i in 1..n -> [] |]
 
@@ -210,17 +210,17 @@ type Hypergraph(edges : EdgeT list) = class
                 
                 match tryDistribute interactions with
                 | true ->
-                    dumps (sprintf "try OptimizeControls with %d bin%s: OK" n (if n = 1 then "" else "s"))
+                    dumps (sprintf "try OptimizeControls with %d control%s: OK" n (if n = 1 then "" else "s"))
                     partition
                 | false ->
-                    dumps (sprintf "try OptimizeControls with %d bin%s: fail" n (if n = 1 then "" else "s"))
+                    dumps (sprintf "try OptimizeControls with %d control%s: fail" n (if n = 1 then "" else "s"))
                     tryPartition (n+1)
 
      
         // build new graph with optimized interactions
         new Hypergraph
             ([
-                for part in tryPartition 1 ->
+                for part in tryPartition 0 ->
                     let edge =
                         part
                         ||> (fun interaction -> interaction.vertices)

@@ -85,9 +85,8 @@ type Liquid.CSMat with
 // Training Gates
 
 // projector gate
-let Projector (states : (float * Data.DataT) list) (theta : float) (qs : Liquid.Qubits) =
+let Projector count (states : (float * Data.DataT) list) (theta : float) (qs : Liquid.Qubits) =
     // matrix size
-    let count = snd(states.[0]).Length
     let size = pown 2 count
     // create diagonal
     let entries = states ||> (fun (strength, state) -> (Liquid.CSMat.Sig2State state, strength)) |> Map.ofList

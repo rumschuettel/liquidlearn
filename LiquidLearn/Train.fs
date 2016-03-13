@@ -114,8 +114,9 @@ type SimpleControlledTrainer
     member this.Size = trainingGraph.Size
 
     // train dataset
-    member this.Train (data : DataSet, ?dataProjectorWeight : float) =
+    member this.Train (data : DataSet, ?dataProjectorWeight : float, ?postSelector : string -> Liquid.Ket -> Liquid.Ket) =
         let dataProjectorWeight = defaultArg dataProjectorWeight 10.
+        let postSelector = defaultArg postSelector (fun _ -> id)
         // run training once for YES and once for NO-instances
 
         let results =
@@ -127,7 +128,7 @@ type SimpleControlledTrainer
                 let projector =
                     new Liquid.SpinTerm(
                         s = 1,
-                        o = Interactions.Projector (data.ValuatedList weight),
+                        o = Interactions.Projector (graph.Outputs.Length) (data.ValuatedList weight),
                         idx = trainingGraph.WhichQubits trainingGraph.Outputs,
                         a = dataProjectorWeight * (float trainingGraph.Size)
                     )
@@ -144,12 +145,13 @@ type SimpleControlledTrainer
                     runonce = true,
                     decohereModel = []
                 )
-                
+                // allow postselection function, also used for test injections
+                let ket = postSelector tag spin.Ket
 
                 // extract trained control probabilities
                 [ for edge in trainingGraph.Edges ->
                     let control = edge.GetControl
-                    let results = MeasurementStatistics spin.Ket ((trainingGraph.WhichQubits control))
+                    let results = MeasurementStatistics ket ((trainingGraph.WhichQubits control))
                     let weights = InterpretControlMeasurement results control
 
                     dumps (sprintf "un-normalized interaction probabilities for edge %A" edge.StripControl)
