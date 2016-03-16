@@ -201,7 +201,7 @@ module Sets =
 
         override this.GateName list = sprintf "%d Paulis" list.Length
 
-        override this.Names n = [ for name in tuples n ['1'; '2'] -> string (new System.String(Seq.toArray name)), n ]
+        override this.Names n = [ for name in tuples n ['0'; '1'; '2'; '3'] -> string (new System.String(Seq.toArray name)), n ]
         override this.Matrix name = GeneratedCode.PauliProductMatrices.Get name
 
     // Projectors

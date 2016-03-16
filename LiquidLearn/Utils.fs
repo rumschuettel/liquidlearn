@@ -125,7 +125,7 @@ let dumpsWithColor color sth =
     System.Console.ForegroundColor <- color
     printfn "%s" sth
     System.Console.ForegroundColor <- oldColor
-let Dumps = dumpsWithColor System.ConsoleColor.DarkMagenta
+let Dumps = dumpsWithColor System.ConsoleColor.Magenta
 let dumps = dumpsWithColor System.ConsoleColor.White
 let Dump sth = dumpsWithColor System.ConsoleColor.Yellow (sprintf "%A" sth)
 let dump sth =

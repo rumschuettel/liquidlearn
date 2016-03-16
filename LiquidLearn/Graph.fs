@@ -176,12 +176,15 @@ type Hypergraph(edges : EdgeT list) = class
             // too many interactions in partition
             if list.Length >= maxInteractions then None
             // fill up empty arrays first, only if there's no way of adding an interaction to a list without increasing its score
+            // this guarantees that a partitioning *will* be found eventually, when we distribute each interaction to its own edge
             elif list.Length = 0 then Some 1
             // score is difference in unique vertex count
             else
                 let before = countVertices list
                 let after  = countVertices (interaction :: list)
-                Some (after - before)
+                // too many vertices?
+                if after > maxVertices then None
+                else Some (after - before)
 
         // try distributing the interactions to a partition of size n
         let rec tryPartition = function

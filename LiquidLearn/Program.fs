@@ -84,7 +84,7 @@ module LearnApp =
         let data = (AllDataSets 2)
         let edges = [ O"1" --- O"2"; ]
         let graph = new Hypergraph(edges)
-        let model = new SimpleControlledTrainer(graph, Sets.Random(), trainOnQudits = 4, maxVertices = 4)
+        let model = new SimpleControlledTrainer(graph, Sets.Paulis(), trainOnQudits = 5, maxVertices = 2)
 
         data
             ||> fun d -> 
@@ -122,6 +122,7 @@ module LearnApp =
     [<EntryPoint>]
     let main _ = 
         Dumps "LiquidLearn (c) 2016 Johannes Bausch (jkrb2@cam.ac.uk)"
-        System.Console.ForegroundColor <- System.ConsoleColor.DarkGray // tone down liquid output
 
+        // tone down liquid output
+        System.Console.ForegroundColor <- if Type.GetType("Mono.Runtime") <> null then System.ConsoleColor.Gray else System.ConsoleColor.DarkGray 
         App.RunLiquid()
