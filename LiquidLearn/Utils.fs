@@ -2,9 +2,15 @@
 module LiquidLearn.Utils
 
 
+// math stuff
+let rand = new System.Random()
+let log2 n = System.Math.Log(float n, 2.0)
+let flog2 n = System.Math.Log(n, 2.0)
+let nextPowerOf2 n = 2.0**(log2 n |> ceil) |> round |> int
+
+
 // aliases, shortcuts and F# greatness
 let join = String.concat
-let rand = new System.Random()
 
 
 type PipeForwardT = PipeForwardT with
@@ -115,9 +121,6 @@ let (|EmptySet|_|) (set : Set<'T>) =
     if set.IsEmpty then Some() else None
 
 
-// math stuff
-let log2 n = System.Math.Log(float n, 2.0)
-let nextPowerOf2 n = 2.0**(log2 n |> ceil) |> round |> int
 
 // dump function
 let dumpsWithColor color sth =

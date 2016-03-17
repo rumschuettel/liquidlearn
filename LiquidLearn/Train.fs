@@ -17,17 +17,25 @@ let MeasurementStatistics (ket : Liquid.Ket) (qubits : int list) =
 // interpret measurement result on controlled interaction
 let InterpretControlMeasurement (results : float list) (control : Graph.VertexT) =
     let interactions = control.Unwrap.interactions
-    let controlSlots = nextPowerOf2 (interactions.Length + 1)
-    let controlCount = (controlSlots - interactions.Length)
+    let totalBlocks = nextPowerOf2 (interactions.Length + 1)
 
-    // neutral offset: if all probabilities on 2 qubits are 0.25, 0.25, 0.25, 0.25 then it's neither positive or negative
-    // and we return 0, 0, 0, 0; for 3 qubits it'd be 0.125 etc.
-    let neutralOffset = 1.0 / (float results.Length)
+    // for e.g. 5 interactions, we reserved 3 qubits, so totalBlocks = 8; which should equal the measured qubit list (2^3=8)
+    assert (totalBlocks = results.Length)
+
+    // number of identity blocks in the top left
+    let controlBlocks = (totalBlocks - interactions.Length)
+
+    // support on control
+    let zeroInteractionSupport =
+        results
+        |> List.take controlBlocks
+        |> List.sum
 
     let results =
         results
-        |> List.skip controlCount
-        ||> (fun prob -> prob - neutralOffset)
+        |> List.skip controlBlocks
+        ||> (fun prob -> (prob - zeroInteractionSupport) * (float interactions.Length))
+
 
     List.zip interactions results
 
@@ -70,7 +78,7 @@ type SimpleControlledTrainer
 
     do
         Dumps "Simple Controlled Qubit Trainer"
-        dumps (sprintf "trainOnQudits=%s, trotter=%d, steps=%d" (if trainOnQudits > 1 then (sprintf "yes, %d" trainOnQudits) else "no") trotter (12*resolution))
+        dumps (sprintf "trainOnQudits=%s, trotter=%d, steps=%d" (if trainOnQudits > 1 then (sprintf "yes (%d)" trainOnQudits) else "no") trotter (12*resolution))
         dump graph
 
     // create controlled version of graph
@@ -112,6 +120,9 @@ type SimpleControlledTrainer
 
     // return size of training graph
     member this.Size = trainingGraph.Size
+
+    // return training graph
+    member this.TrainingGraph = trainingGraph
 
     // train dataset
     member this.Train (data : DataSet, ?dataProjectorWeight : float, ?postSelector : string -> Liquid.Ket -> Liquid.Ket) =

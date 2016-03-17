@@ -95,6 +95,9 @@ let inline (---) a b =
     ||> unbox<VertexT>
     |> EdgeT
 
+// helper types for graph
+exception WouldSplitEdgeException
+exception NoOptimalGraphFound
 
 [<StructuredFormatDisplay("Hypergraph {DisplayForm}")>]
 type Hypergraph(edges : EdgeT list) = class
@@ -132,7 +135,7 @@ type Hypergraph(edges : EdgeT list) = class
             "\n  edges:    " :: (edges ||> sprintf "%A ")
         )
 
-    member this.ShortForm = sprintf "%dV%dE-%x" vertices.Length edges.Length (abs(hash edges) % 16*16*16)
+    member this.ShortForm = sprintf "%dV%dE-%x" vertices.Length edges.Length (abs(hash edges) % (16*16*16))
 
     // vertices and edges
     member this.Edges = edges
@@ -152,7 +155,13 @@ type Hypergraph(edges : EdgeT list) = class
             ])
 
     // return an optimized graph
-    member this.OptimizeControls (maxInteractions : int, maxVertices : int) =
+    member this.OptimizeControls
+        (
+            maxInteractions : int,
+            maxVertices : int,
+            ?avoidSplittingEdges : bool
+        ) =
+        let avoidSplittingEdges = defaultArg avoidSplittingEdges true
         // this is a variant of integer list partitioning, which is known to be NP-hard
         // we use a poly-time greedy approximation, known to lie within 7/6 of the optimal solution
         let interactions =
@@ -173,22 +182,31 @@ type Hypergraph(edges : EdgeT list) = class
 
         // gives a score of adding the interaction to an array
         let score (interaction : InteractionT) (list : InteractionT list) =
+            let listContainsEdge =
+                if avoidSplittingEdges then
+                    (list |> List.tryFind (fun l -> l.vertices = interaction.vertices)).IsSome
+                else
+                    false // ignore this check and bunch edges together at will
             // too many interactions in partition
-            if list.Length >= maxInteractions then None
+            if list.Length >= maxInteractions then
+                if listContainsEdge then raise WouldSplitEdgeException
+                None
+            // if the list already has an interaction between the given vertices, we want to add it to this list
+            elif listContainsEdge then Some 1000
             // fill up empty arrays first, only if there's no way of adding an interaction to a list without increasing its score
             // this guarantees that a partitioning *will* be found eventually, when we distribute each interaction to its own edge
-            elif list.Length = 0 then Some 1
+            elif list.Length = 0 then Some -1
             // score is difference in unique vertex count
             else
                 let before = countVertices list
                 let after  = countVertices (interaction :: list)
                 // too many vertices?
                 if after > maxVertices then None
-                else Some (after - before)
+                else Some (2 * (before - after))
 
         // try distributing the interactions to a partition of size n
         let rec tryPartition = function
-            | n when n < 0 || n > interactions.Length -> failwith "invalid partition parameters"
+            | n when n < 0 || n > interactions.Length -> raise NoOptimalGraphFound
             | n ->
                 let partition : InteractionT list [] = [| for i in 1..n -> [] |]
 
@@ -197,33 +215,38 @@ type Hypergraph(edges : EdgeT list) = class
                     | interaction::tail ->
                         shuffle partition |> ignore
                         // find all scores for adding interaction to each possible urn
-                        let scores = score interaction <|| partition
+                        // we don't care about tail recursion as we will not have a lot of calls
+                        try
+                            let scores = score interaction <|| partition
 
-                        if scores |> Array.forall (fun score -> score = None) then false
-                        else
-                            let minScore =
-                                scores
-                                |> Array.filter (function None -> false | _ -> true)
-                                |> Array.min
+                            // can't add to any part? break.
+                            if scores |> Array.forall (fun score -> score = None) then false
+                            // otherwise, add to the item with highest score
+                            else
+                                let maxScore =
+                                    scores
+                                    |> Array.filter (function None -> false | _ -> true)
+                                    |> Array.max
 
-                            // add to the item with lowest score
-                            let minScoreIndex = scores |> Array.findIndex (fun s -> s = minScore)
-                            partition.[minScoreIndex] <- interaction :: partition.[minScoreIndex]
-                            tryDistribute tail
+                                let maxScoreIndex = scores |> Array.findIndex (fun s -> s = maxScore)
+                                partition.[maxScoreIndex] <- interaction :: partition.[maxScoreIndex]
+                                tryDistribute tail
+                        with
+                        | :? WouldSplitEdgeException -> false
+
                 
                 match tryDistribute interactions with
                 | true ->
-                    dumps (sprintf "try OptimizeControls with %d control%s: OK" n (if n = 1 then "" else "s"))
+                    dumps (sprintf "try OptimizeControls with %d edge%s: OK" n (if n = 1 then "" else "s"))
                     partition
                 | false ->
-                    dumps (sprintf "try OptimizeControls with %d control%s: fail" n (if n = 1 then "" else "s"))
+                    dumps (sprintf "try OptimizeControls with %d edge%s: fail" n (if n = 1 then "" else "s"))
                     tryPartition (n+1)
-
-     
-        // build new graph with optimized interactions
-        new Hypergraph
-            ([
-                for part in tryPartition 0 ->
+        
+        // try building new graph with optimized interactions
+        try
+            new Hypergraph
+                ([ for part in tryPartition 0 ->
                     let edge =
                         part
                         ||> (fun interaction -> interaction.vertices)
@@ -232,7 +255,11 @@ type Hypergraph(edges : EdgeT list) = class
                         |> EdgeT
 
                     C { id=UniqueID; interactions=part } --- edge
-            ])
+                ])
+        with
+        | NoOptimalGraphFound ->
+            dumps "WARN: no more optimal graph within restricted parameters found."
+            this
 
 end
 

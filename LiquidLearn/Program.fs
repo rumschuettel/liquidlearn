@@ -40,13 +40,13 @@ module LearnApp =
 
         // iterate over all interaction sets
         for interaction in interactions do
-            let filename = sprintf "data-%d-graph-%s-%s" datasets.Length graph.ShortForm interaction.ShortForm
+            let filename = sprintf "graph-%s-%s-data-%d" graph.ShortForm interaction.ShortForm datasets.Length 
             if not <| File.Exists(filename + ".stats") then
                 if File.Exists(filename + ".test") then File.Delete(filename + ".test")
 
                 let stopwatch = Stopwatch.StartNew()
 
-                let model = new SimpleControlledTrainer(graph, interaction, trainOnQudits = 4, maxVertices = 4, trotter = 25, resolution = 25)
+                let model = new SimpleControlledTrainer(graph, interaction, trainOnQudits = 5, maxVertices = 3, trotter = 25, resolution = 25)
                 let timeModelCreated = stopwatch.ElapsedMilliseconds
                
                 if model.Size > 18 then
@@ -62,7 +62,7 @@ module LearnApp =
                     let timeDone = stopwatch.ElapsedMilliseconds
 
                     // write stats file
-                    File.WriteAllText(filename + ".stats", sprintf "timeModelCreated %d\ntimeDone %d\n\n%A\n\n%A\n\n%A" timeModelCreated timeDone graph interaction datasets)
+                    File.WriteAllText(filename + ".stats", sprintf "timeModelCreated %d\ntimeDone %d\n\n%A\n%A\n\n%A\n\n%A" timeModelCreated timeDone graph model.TrainingGraph interaction datasets)
 
                             
 
@@ -81,10 +81,10 @@ module LearnApp =
 
     [<LQD>]
     let Learn() =
-        let data = (AllDataSets 2)
-        let edges = [ O"1" --- O"2"; ]
+        let data = (AllDataSets 2) |> List.take 1
+        let edges = [ O"1" --- V"h"; V"h" --- O"2" ]
         let graph = new Hypergraph(edges)
-        let model = new SimpleControlledTrainer(graph, Sets.Paulis(), trainOnQudits = 5, maxVertices = 2)
+        let model = new SimpleControlledTrainer(graph, Sets.Paulis(), trainOnQudits = 5, maxVertices = 3)
 
         data
             ||> fun d -> 
