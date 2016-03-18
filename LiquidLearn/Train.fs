@@ -86,7 +86,7 @@ type SimpleControlledTrainer
         (graph.AddControls ( fun edge ->
         // for now, every edge gets one control with all possible interactions on that edge
             [{
-                id = UniqueID
+                id = UniqueID()
                 interactions = interactions.ListPossibleInteractions edge
             }]
         )).OptimizeControls(
@@ -145,6 +145,7 @@ type SimpleControlledTrainer
                     )
 
                 // create spin model and train
+                dumps (sprintf "allocating %d qubits" trainingGraph.Size)
                 let spin = new Liquid.Spin(projector :: couplings, trainingGraph.Size, Liquid.RunMode.Trotter1X)
                 Liquid.Spin.Test(
                     tag = "train " + tag,

@@ -140,7 +140,7 @@ let dump sth =
 
 // unique incrementing id
 let mutable internal _uniqueIDCounter = 0
-let UniqueID =
+let UniqueID() =
     _uniqueIDCounter <- _uniqueIDCounter + 1
     string _uniqueIDCounter
 

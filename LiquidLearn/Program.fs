@@ -120,13 +120,13 @@ module LearnApp =
 
         let dataSets6 = SomeDataSets 6 10 5 25 |> fun a -> List.zip a a
 
-        // list of runs
+        // batch list of runs
         let runs : ((DataSet*DataSet) list * EdgeT list * Sets.IInteractionFactory list) list = [
-(*            dataSets2, [ O"1" --- O"2" ], [Sets.Projectors(); Sets.Paulis(); Sets.Heisenberg(); Sets.Ising(); Sets.Random()]
+            dataSets2, [ O"1" --- O"2" ], [Sets.Projectors(); Sets.Paulis(); Sets.Heisenberg(); Sets.Ising(); Sets.Random()]
             dataSets2, [ O"1" --- V"h"; V"h" --- O"2" ], [Sets.Projectors(); Sets.Paulis(); Sets.Heisenberg(); Sets.Ising(); Sets.Random()]
-            dataSets3, [ O"1" --- V"h"; V"h" --- O"2"; V"h" --- O"3" ], [Sets.Projectors(); Sets.Heisenberg(); Sets.Ising(); Sets.Random(); Sets.Paulis()]*)
+            dataSets3, [ O"1" --- V"h"; V"h" --- O"2"; V"h" --- O"3" ], [Sets.Projectors(); Sets.Heisenberg(); Sets.Ising(); Sets.Random(); Sets.Paulis()]
             
-            dataSets6, [ O"1" --- V"a"; V"a" --- O"4"; V"a" --- O"2"; V"a" --- V"b"; V"a" --- O"5"; O"2" --- V"b"; O"5" --- V"b"; V"b" --- O"3"; V"b" --- O"6"], [Sets.Heisenberg(); Sets.Ising()]
+            dataSets6, [ O"1" --- V"a"; V"a" --- O"4"; V"a" --- O"2"; V"a" --- V"b"; V"a" --- O"5"; O"2" --- V"b"; O"5" --- V"b"; V"b" --- O"3"; V"b" --- O"6"], [ Sets.Ising(); Sets.Heisenberg() ]
         ]
 
         // run

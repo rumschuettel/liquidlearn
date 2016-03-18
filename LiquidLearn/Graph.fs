@@ -159,18 +159,26 @@ type Hypergraph(edges : EdgeT list) = class
         (
             maxInteractions : int,
             maxVertices : int,
-            ?avoidSplittingEdges : bool
+            ?avoidSplittingEdges : bool,
+            ?deleteDuplicateInteractions : bool
         ) =
         let avoidSplittingEdges = defaultArg avoidSplittingEdges true
+        let deleteDuplicateInteractions = defaultArg deleteDuplicateInteractions true
         // this is a variant of integer list partitioning, which is known to be NP-hard
         // we use a poly-time greedy approximation, known to lie within 7/6 of the optimal solution
+        
+        // extract a list of all interactions in the graph, delete potential duplicates and shuffle
         let interactions =
             this.Controls
             ||> fun control -> control.Unwrap.interactions
-            |> Array.ofList
+            |> List.concat
+            |> fun interactions ->
+                if deleteDuplicateInteractions then
+                    interactions |> Set.ofList |> Set.toArray
+                else
+                    interactions |> List.toArray
             |> shuffle
             |> Array.toList
-            |> List.concat
 
         // count vertices in interaction sequence
         let countVertices interactions =
@@ -254,7 +262,7 @@ type Hypergraph(edges : EdgeT list) = class
                         |> Set.ofList
                         |> EdgeT
 
-                    C { id=UniqueID; interactions=part } --- edge
+                    C { id=UniqueID(); interactions=part } --- edge
                 ])
         with
         | NoOptimalGraphFound ->
