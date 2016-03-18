@@ -11,6 +11,8 @@ let nextPowerOf2 n = 2.0**(log2 n |> ceil) |> round |> int
 
 // aliases, shortcuts and F# greatness
 let join = String.concat
+let pluralS n =
+    if abs n = 1 then "" else "s"
 
 
 type PipeForwardT = PipeForwardT with

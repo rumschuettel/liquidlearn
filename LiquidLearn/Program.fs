@@ -126,7 +126,7 @@ module LearnApp =
             dataSets2, [ O"1" --- V"h"; V"h" --- O"2" ], [Sets.Projectors(); Sets.Paulis(); Sets.Heisenberg(); Sets.Ising(); Sets.Random()]
             dataSets3, [ O"1" --- V"h"; V"h" --- O"2"; V"h" --- O"3" ], [Sets.Projectors(); Sets.Heisenberg(); Sets.Ising(); Sets.Random(); Sets.Paulis()]
             
-            dataSets6, [ O"1" --- V"a"; V"a" --- O"4"; V"a" --- O"2"; V"a" --- V"b"; V"a" --- O"5"; O"2" --- V"b"; O"5" --- V"b"; V"b" --- O"3"; V"b" --- O"6"], [ Sets.Ising(); Sets.Heisenberg() ]
+            dataSets6, [ O"1" --- V"a"; V"a" --- O"4"; V"a" --- O"2"; V"a" --- V"b"; V"a" --- O"5"; O"2" --- V"b"; O"5" --- V"b"; V"b" --- O"3"; V"b" --- O"6"], [ Sets.Projectors(); Sets.Ising(); Sets.Heisenberg()  ]
         ]
 
         // run
