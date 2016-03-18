@@ -33,66 +33,76 @@ type VertexT =
         | _ -> 1
 and ControlT = {
     id : string
-    interactions : string list // control vertex stores a list of interaction identifiers
+    interactions : InteractionT list // control vertex stores a list of interaction identifiers
+}
+and InteractionT = {
+    name : string
+    vertices : VertexT list // order matters
 }
 
 // edge as a vertex list
 [<StructuredFormatDisplay("({DisplayForm})")>]
-type EdgeT = | EdgeT of VertexT list
+type EdgeT = EdgeT of Set<VertexT>
     with
-    member this.DisplayForm = join " --- " (this.Vertices ||> sprintf "%A")
+    member this.DisplayForm = join " --- " (this.NormalOrder ||> sprintf "%A")
 
     member this.Vertices = match this with | EdgeT vertices -> vertices
 
     // true if edge has a controlled vertex
     member this.IsControlled =
-        match List.tryFind (fun (vertex : VertexT) -> vertex.IsControl) this.Vertices with
-        | Some _ -> true
-        | None -> false
+        Set.exists (fun (vertex : VertexT) -> vertex.IsControl) this.Vertices
 
     // get control interaction
     member this.GetControl =
-        match List.tryFind (fun (vertex : VertexT) -> vertex.IsControl) this.Vertices with
-        | Some (C control) -> C control
-        | _ -> failwith "edge has no control vertex"
+        match Set.filter (fun (vertex : VertexT) -> vertex.IsControl) this.Vertices |> Set.toList with
+        | [] -> failwith "edge has no control vertex"
+        | [c] -> c
+        | _ -> failwith "edge has more than one control vertex"
 
     // strip control interaction
     member this.StripControl =
         this.Vertices
-        |> List.filter (fun vertex -> not vertex.IsControl)
-        |> EdgeT
+            |> Set.filter (fun vertex -> not vertex.IsControl)
+            |> EdgeT
 
 
-    // put the control vertex to however controlled interactions are created
+    // put the control vertex into unique normal order:
+    // put controls to however controlled interactions are created,
+    // i.e. in this case at the beginning, meaning that the control should be in the upper left block of any matrix
+    // note that this does not mean that the control qubits have to be the first vertices of a graph
     member this.NormalOrder =
-        EdgeT (Seq.sortBy (fun vertex ->
-            match vertex with
-            | C _ -> 0
-            | _ -> 1
-        ) this.Vertices |> Seq.toList)
+        this.Vertices
+            |> Set.toSeq
+            |> Seq.sort
+            |> Seq.sortBy (function C _ -> 0 | _ -> 1)
+            |> Seq.toList
 
-    member this.Size = this.Vertices.Length
+    member this.Size = this.Vertices.Count
+
+    member this.Subsets = powerset this.NormalOrder |> Seq.groupBy (fun el -> el.Length) |> Seq.toList ||> snd
 
 
 // F# does not support overloading non-tuple operators
 let inline (---) a b = 
     (
         match box a, box b with
-        | (:? EdgeT as a), (:? EdgeT as b) -> [a.Vertices; b.Vertices] |> List.concat
-        | (:? VertexT as a), (:? EdgeT as b) -> [[a]; b.Vertices] |> List.concat
-        | (:? EdgeT as a), (:? VertexT as b) -> [a.Vertices; [b]] |> List.concat
-        | (:? VertexT as a), (:? VertexT as b) -> [a; b]
+        | (:? EdgeT as a), (:? EdgeT as b) -> Set.union a.Vertices b.Vertices
+        | (:? VertexT as a), (:? EdgeT as b) -> b.Vertices.Add a
+        | (:? EdgeT as a), (:? VertexT as b) -> a.Vertices.Add b
+        | (:? VertexT as a), (:? VertexT as b) -> Set.ofList [a; b]
         | _ -> failwith "not a valid hyperedge type"
     )
     ||> unbox<VertexT>
     |> EdgeT
 
+// helper types for graph
+exception WouldSplitEdgeException
+exception NoOptimalGraphFound
 
 [<StructuredFormatDisplay("Hypergraph {DisplayForm}")>]
 type Hypergraph(edges : EdgeT list) = class
-    // put edges in correct order, extract unique vertices, outputs and controls
-    let edges = [for e in edges -> e.NormalOrder]
-    let vertices = [for e in edges -> e.Vertices] |> List.concat |> Set.ofList |> Set.toList
+    // extract unique vertices and put into list for unique ordering, outputs and controls
+    let vertices = [for e in edges -> e.Vertices] |> Set.unionMany |> Set.toList
     let outputs = vertices |> List.filter (function O _ -> true | _ -> false)
     let controls = vertices |> List.filter (function C _ -> true | _ -> false)
 
@@ -112,15 +122,20 @@ type Hypergraph(edges : EdgeT list) = class
         |> Map.ofList   
     let qubitCount = ((Map.toList qubitLookupTable) ||> snd |> List.concat |> List.max) + 1
 
+    // allows to look up a unique qubit for vertices or an edge
+    // the edge qubits are normal-ordered, as edges are sets where a control can have a specific position which we want to be unambiguous
+    // the vertex list is unordered, so that the qubits for a; b are 0; 1 but for b; a it's 1; 0
     member this.WhichQubits (vertex : VertexT) = qubitLookupTable.[vertex]
     member this.WhichQubits (vertices : VertexT list) = vertices ||> this.WhichQubits |> List.concat
-    member this.WhichQubits (edge : EdgeT) = edge.Vertices |> this.WhichQubits
+    member this.WhichQubits (edge : EdgeT) = edge.NormalOrder |> this.WhichQubits
 
     member this.DisplayForm =
         join "" (
-            "\nvertices: " :: (List.zip vertices (vertices ||> this.WhichQubits) ||> sprintf "%A ") @
-            "\nedges:    " :: (edges ||> sprintf "%A ")
+            "\n  vertices: " :: (List.zip vertices (vertices ||> this.WhichQubits) ||> sprintf "%A ") @
+            "\n  edges:    " :: (edges ||> sprintf "%A ")
         )
+
+    member this.ShortForm = sprintf "%dV%dE-%x" vertices.Length edges.Length (abs(hash edges) % (16*16*16))
 
     // vertices and edges
     member this.Edges = edges
@@ -129,8 +144,8 @@ type Hypergraph(edges : EdgeT list) = class
     member this.Controls = controls
     member this.Size = qubitCount
     
-    // return graph where either every or only some hyperedges are extended by one or more control vertices
-    // we are not yet checking whether the graph is already controlled
+    // return graph where every hyperedge is extended by a control vertex
+    // we are not checking whether the graph is already controlled
     member this.AddControls (f : EdgeT -> ControlT list) =
         new Hypergraph
             ([
@@ -139,6 +154,112 @@ type Hypergraph(edges : EdgeT list) = class
                         yield C control --- e
             ])
 
+    // return an optimized graph
+    member this.OptimizeControls
+        (
+            maxInteractions : int,
+            maxVertices : int,
+            ?avoidSplittingEdges : bool
+        ) =
+        let avoidSplittingEdges = defaultArg avoidSplittingEdges true
+        // this is a variant of integer list partitioning, which is known to be NP-hard
+        // we use a poly-time greedy approximation, known to lie within 7/6 of the optimal solution
+        let interactions =
+            this.Controls
+            ||> fun control -> control.Unwrap.interactions
+            |> Array.ofList
+            |> shuffle
+            |> Array.toList
+            |> List.concat
+
+        // count vertices in interaction sequence
+        let countVertices interactions =
+            interactions
+            ||> fun el -> el.vertices
+            |> Seq.concat
+            |> Set.ofSeq
+            |> Set.count
+
+        // gives a score of adding the interaction to an array
+        let score (interaction : InteractionT) (list : InteractionT list) =
+            let listContainsEdge =
+                if avoidSplittingEdges then
+                    (list |> List.tryFind (fun l -> l.vertices = interaction.vertices)).IsSome
+                else
+                    false // ignore this check and bunch edges together at will
+            // too many interactions in partition
+            if list.Length >= maxInteractions then
+                if listContainsEdge then raise WouldSplitEdgeException
+                None
+            // if the list already has an interaction between the given vertices, we want to add it to this list
+            elif listContainsEdge then Some 1000
+            // fill up empty arrays first, only if there's no way of adding an interaction to a list without increasing its score
+            // this guarantees that a partitioning *will* be found eventually, when we distribute each interaction to its own edge
+            elif list.Length = 0 then Some -1
+            // score is difference in unique vertex count
+            else
+                let before = countVertices list
+                let after  = countVertices (interaction :: list)
+                // too many vertices?
+                if after > maxVertices then None
+                else Some (2 * (before - after))
+
+        // try distributing the interactions to a partition of size n
+        let rec tryPartition = function
+            | n when n < 0 || n > interactions.Length -> raise NoOptimalGraphFound
+            | n ->
+                let partition : InteractionT list [] = [| for i in 1..n -> [] |]
+
+                let rec tryDistribute = function
+                    | [] -> true
+                    | interaction::tail ->
+                        shuffle partition |> ignore
+                        // find all scores for adding interaction to each possible urn
+                        // we don't care about tail recursion as we will not have a lot of calls
+                        try
+                            let scores = score interaction <|| partition
+
+                            // can't add to any part? break.
+                            if scores |> Array.forall (fun score -> score = None) then false
+                            // otherwise, add to the item with highest score
+                            else
+                                let maxScore =
+                                    scores
+                                    |> Array.filter (function None -> false | _ -> true)
+                                    |> Array.max
+
+                                let maxScoreIndex = scores |> Array.findIndex (fun s -> s = maxScore)
+                                partition.[maxScoreIndex] <- interaction :: partition.[maxScoreIndex]
+                                tryDistribute tail
+                        with
+                        | :? WouldSplitEdgeException -> false
+
+                
+                match tryDistribute interactions with
+                | true ->
+                    dumps (sprintf "try OptimizeControls with %d edge%s: OK" n (if n = 1 then "" else "s"))
+                    partition
+                | false ->
+                    dumps (sprintf "try OptimizeControls with %d edge%s: fail" n (if n = 1 then "" else "s"))
+                    tryPartition (n+1)
+        
+        // try building new graph with optimized interactions
+        try
+            new Hypergraph
+                ([ for part in tryPartition 0 ->
+                    let edge =
+                        part
+                        ||> (fun interaction -> interaction.vertices)
+                        |> List.concat
+                        |> Set.ofList
+                        |> EdgeT
+
+                    C { id=UniqueID; interactions=part } --- edge
+                ])
+        with
+        | NoOptimalGraphFound ->
+            dumps "WARN: no more optimal graph within restricted parameters found."
+            this
 
 end
 

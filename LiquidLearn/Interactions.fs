@@ -5,6 +5,16 @@ open Microsoft.Research
 open Liquid.Operations // for >< and !! operator
 
 open Utils
+open System
+
+module Matrices =
+    // some standard matrices
+    let PauliX = Liquid.CSMat(2, [0, 1, 1.0, 0.0; 1, 0, 1.0, 0.0])
+    let PauliY = Liquid.CSMat(2, [0, 1, 0.0, -1.0; 1, 0, 0.0, 1.0])
+    let PauliZ = Liquid.CSMat(2, [0, 0, 1.0, 0.0; 1, 1, -1.0, 0.0])
+    let Identity = Liquid.CSMat(2, [0, 0, 1.0, 0.0; 1, 1, 1.0, 0.0])
+    let IdentityN n = Liquid.CSMat(n, [ for i in 0..n-1 -> i, i, 1.0, 0.0 ])
+        
 
 type Liquid.CSMat with
     // direct sum
@@ -26,57 +36,70 @@ type Liquid.CSMat with
         Liquid.CSMat(totalSize, List.concat [thisEntries; otherEntries])
 
     // basis permutation helpers
-    // Sig2State (Parse "011") = 3
+    // Sig2State (FromString "011") = 3
     static member Sig2State (signature : Data.DataT) = 
         let signature = signature |> List.rev
         [ for i in 0..signature.Length-1 -> if signature.[i] = Data.BitT.One then pown 2 i else 0 ] |> List.sum
 
     // |001><010|
-    static member Rank1Projector (sigA, sigB, dim) =
-        let stateA, stateB = (sigA, sigB) ||> Sig2State
-        Liquid.CSMat(dim, [(stateA, stateB, 1., 0)])
+    static member Rank1Projector dim (sigA, sigB) =
+        let stateA, stateB = (sigA, sigB) ||> Liquid.CSMat.Sig2State
+        Liquid.CSMat(dim, [(stateA, stateB, 1., 0.)])
 
-    static member RankNProjector (sigsA, 
+    static member RankNProjector dim (sigs : (Data.StateT * Data.StateT) list) =
+        sigs
+            ||> Liquid.CSMat.Rank1Projector dim
+            ||> fun m -> m.Dense()
+            |> List.reduce (fun acc m -> acc.Add(m); acc)
+            |> Liquid.CSMat
+
+    static member BasisPermutationMatrix permutation systems =
+        let basis = [Data.BitT.Zero; Data.BitT.One] |> tuples systems
+        let permutedBasis = basis ||> List.permute permutation
+
+        Liquid.CSMat.RankNProjector (pown 2 systems) (List.zip basis permutedBasis)
+
+    // permutation of basis
+    member this.PermuteBasis permutation =
+        if (log2 this.Length) % 1.0 <> 0.0 then failwith "not a power of 2 matrix size"
+        let systems = log2 this.Length |> round |> int
+        let permutationMatrix = Liquid.CSMat.BasisPermutationMatrix permutation systems
+
+        permutationMatrix.Adj().Mul(this).Mul(permutationMatrix)
+
+    // take a matrix and act with it on qubits specified by 1s in a list, i.e.
+    // M on [0; 1; 1; 0; 0] will be transformed to 1 otimes M otimes 1^3
+    member this.SpreadTo (signature : Data.StateT) =
+        if (log2 this.Length) % 1.0 <> 0.0 then failwith "not a power of 2 matrix size"
+        let systems = log2 this.Length |> round |> int
+        let other = signature.Length - systems
+        match other with
+        | n when n < 0 -> failwith "cannot spread matrix to fewer qubits"
+        | 0 -> this
+        | n ->
+            let bigmatrix = this.Kron (pown 2 (signature.Length - systems))
+            let orig = [for i in 1..systems -> Data.BitT.One ] @ [for i in 1..n -> Data.BitT.Zero ]
+            bigmatrix.PermuteBasis (getPermutation orig signature)
 
 
+// Training Gates
 
-// create sets of gates used in the training algorithms
-(*
-Remark: it seems like the gates used in the simulator are exponentiated Hamiltonian terms, i.e. for a coupling H,
-we need to specify U(t) = exp(i H t), where t = theta.
-That way our gates are actually unitary and everything works out.
-
-The trotter number seems to be a parameter that controls how fine-grained the subdivision is, i.e. it expands
-exp(i (A + B) t) = (exp(i A t/T)exp(i B t/T)^T for some trotter number T.
-Hence the parameter T and theta has to make the coupling "smaller" in the sense that it applies the coupling multiple times.
-*)
-open System
-
-module Matrices =
-    // some standard matrices
-    let PauliX = Liquid.CSMat(2, [0, 1, 1.0, 0.0; 1, 0, 1.0, 0.0])
-    let PauliY = Liquid.CSMat(2, [0, 1, 0.0, -1.0; 1, 0, 0.0, 1.0])
-    let PauliZ = Liquid.CSMat(2, [0, 0, 1.0, 0.0; 1, 1, -1.0, 0.0])
-    let Identity = Liquid.CSMat(2, [0, 0, 1.0, 0.0; 1, 1, 1.0, 0.0])
-    let IdentityN n = Liquid.CSMat(n, [ for i in 0..n-1 -> i, i, 1.0, 0.0 ])
-
-open Matrices
-
-let Projector (states : (float * Data.DataT) list) (theta : float) (qs : Liquid.Qubits) =
+// projector gate
+let Projector count (states : (float * Data.DataT) list) (theta : float) (qs : Liquid.Qubits) =
     // matrix size
-    let count = snd(states.[0]).Length
     let size = pown 2 count
     // create diagonal
-    let entries = states ||> (fun arg -> (Liquid.CSMat.Sig2State (snd arg), arg)) |> Map.ofList
+    let entries = states ||> (fun (strength, state) -> (Liquid.CSMat.Sig2State state, strength)) |> Map.ofList
     let diagonal =
         [
             for i in 0..size-1 ->
                 if entries.ContainsKey i then
-                    let (strength, state) = entries.[i]
+                    let strength = entries.[i]
                     (i, i, Math.Cos(strength * theta), Math.Sin(strength * theta))
                 else
                     (i, i, 1.0, 0.0)
         ]
+
     // create new liquid gate and run
     (new Liquid.Gate(
         Name = "Projector",
@@ -85,6 +108,7 @@ let Projector (states : (float * Data.DataT) list) (theta : float) (qs : Liquid.
         Mat  = Liquid.CSMat(size, diagonal)
     )).Run qs
 
+// gate from matrix
 let MatrixInteraction name (matrix : float -> Liquid.CSMat) theta (qs : Liquid.Qubits) =
     (new Liquid.Gate(
         Name = name,
@@ -102,11 +126,12 @@ let ControlledInteraction name (matrices : (float -> Liquid.CSMat) list) theta (
     // next power of 2, need at least one identity matrix, hence the +1
     let totalSize = nextPowerOf2 (usefulMatrixSize + singleMatrixSize)
 
-    let identity = IdentityN (totalSize - usefulMatrixSize)
+    let identity = Matrices.IdentityN (totalSize - usefulMatrixSize)
     let matrices = (fun matrix -> matrix theta) <|| matrices
 
     // direct sum all matrices to 1 + m1+m2+...+mn
     let matrixSum = matrices |> List.fold (fun (bigmatrix : Liquid.CSMat) matrix -> bigmatrix.Plus matrix) identity
+
 
     (new Liquid.Gate(
         Name = "QuditControl",
@@ -125,75 +150,100 @@ module Sets =
 
     // Interaction base class
     [<AbstractClass>]
+    [<StructuredFormatDisplay("{ShortForm}")>]
     type IInteractionFactory() =
-        // give back gate name for a list of interaction ids
-        abstract member GateName : string list -> string
-        // give a complete list of possible interactions for an edge of given size
-        abstract member Names : int -> string list
+        abstract member ShortForm : string
+        // give back gate name for a list of interactions
+        abstract member GateName : Graph.InteractionT list -> string
+        // give a complete list of possible interactions * number of qubits it acts on
+        abstract member Names : int -> (string * int) list
         // for any id returned by Names, this function has to return a valid matrix
         // the size of the matrix has to be n qubits, where n is given to Names to yield the id.
         abstract member Matrix : string -> (float -> Liquid.CSMat)
 
+
+
+        // for every edge, pass a list of interactions and the vertices within that edge
+        // that the interaction is acting on nontrivially
+        // the locality given for every name has to equal the size of the matrix returned by Matrix name
         member this.ListPossibleInteractions (edge : Graph.EdgeT) =
-            this.Names edge.Size
+            let whole = edge.StripControl.NormalOrder
+            let subsystems = edge.Subsets
+            [ for name, locality in this.Names edge.Size ->
+                [ for vertices in subsystems.[locality] ->
+                  {
+                    Graph.InteractionT.name = name
+                    Graph.InteractionT.vertices = vertices
+                } ]
+            ] |> List.concat
 
-        member this.Interaction name =
-            MatrixInteraction name (this.Matrix name)
+        // simply gives back one matrix interaction for an interaction name
+        member this.Interaction (interaction : Graph.InteractionT) =
+            MatrixInteraction (sprintf "%s on %A" interaction.name interaction.vertices) (this.Matrix interaction.name)
 
+        // gives back a big controlled interaction matrix for all the interactions in the edge.control.interactions list
         member this.ControlledInteraction (edge : Graph.EdgeT) =
+            let whole = edge.StripControl.NormalOrder
             let interactions = edge.GetControl.Unwrap.interactions
-            let matrices = [ for name in interactions -> this.Matrix name ]
+            let matrices =
+                [ for interaction in interactions ->
+                    // if interaction.vertices = 1; 2 and whole = 0; 1; 2; 3; 4 then signature = 01100
+                    let signature = [ for v in whole -> if contains v interaction.vertices then Data.BitT.One else Data.BitT.Zero ]
+                    let matrix = this.Matrix interaction.name
+                    fun theta -> (matrix theta).SpreadTo signature
+                ]
             ControlledInteraction (this.GateName interactions) matrices
 
     // Pauli matrix products
     type Paulis() =
         inherit IInteractionFactory()
+        override this.ShortForm = "Paulis"
 
         override this.GateName list = sprintf "%d Paulis" list.Length
 
-        override this.Names n = [ for name in tuples n ['0'; '3'; '2'] -> string (new System.String(Seq.toArray name)) ]
+        override this.Names n = [ for name in tuples n ['0'; '1'; '2'; '3'] -> string (new System.String(Seq.toArray name)), n ]
         override this.Matrix name = GeneratedCode.PauliProductMatrices.Get name
 
     // Projectors
     type Projectors() =
         inherit IInteractionFactory()
 
+        override this.ShortForm = "Projectors"
+
         override this.GateName list = sprintf "%d Projectors" list.Length
 
-        override this.Names n = [ for name in tuples n ['0'; '1'] -> string (new System.String(Seq.toArray name)) ]
+        override this.Names n = [ for name in tuples n ['0'; '1'] -> string (new System.String(Seq.toArray name)), n ]
         override this.Matrix name = GeneratedCode.Rank1ProjectionMatrices.Get name
-
-    // Compressed Projectors
-    // These are 2-local 3-qubit interactions, which saves a lot of qubits when training on qudits
-    type CompressedProjectors() =
-        inherit IInteractionFactory()
-
-        override this.GateName list = sprintf "%d CProjectors" list.Length
-
-        override this.Names n = GeneratedCode.Rank1CompressedProjectionMatrices.List |> List.filter (fun name -> name.Length = n)
-        override this.Matrix name = GeneratedCode.Rank1CompressedProjectionMatrices.Get name
 
     // Compressed Random Matrices
     // set of 5 random sparse Hermitian matrices
     // These are 2-local 3-qubit interactions or 2-local 2-qubit
-    type CompressedRandom() =
+    type Random() =
         inherit IInteractionFactory()
 
-        override this.GateName list = sprintf "%d CRandom" list.Length
+        override this.ShortForm = "Random"
 
-        override this.Names n = GeneratedCode.RandomHermitianCompressed.List |> List.filter (fun name -> name.Length = n+1)
-        override this.Matrix name = GeneratedCode.RandomHermitianCompressed.Get name
-
-    // Compressed History State Matrices
-    // set of 5 special matrices from History state constructions
-    // These are 2-local 3-qubit interactions or 2-local 2-qubit
-    type CompressedHistory() =
-        inherit IInteractionFactory()
-        let NamesRegex = System.Text.RegularExpressions.Regex("[1x]+$")
-
-        override this.GateName list = sprintf "%d CHistory" list.Length
+        override this.GateName list = sprintf "%d Random" list.Length
 
         override this.Names n =
-            let foo = GeneratedCode.UniversalHistoryCompressed.List |> List.filter (fun name -> NamesRegex.Match(name).Length = n)
-            foo
-        override this.Matrix name = GeneratedCode.UniversalHistoryCompressed.Get name
+            match n with
+            | n when n >= 2 -> GeneratedCode.SparseRandomHermitian.List ||> fun name -> name, 2
+            | _ -> failwith "History State matrices are 2-local"
+
+        override this.Matrix name = GeneratedCode.SparseRandomHermitian.Get name
+
+    // History State Matrices
+    // set of 5 special matrices from History state constructions, all 2-local
+    type History() =
+        inherit IInteractionFactory()
+
+        override this.ShortForm = "History"
+
+        override this.GateName list = sprintf "%d History" list.Length
+
+        override this.Names n =
+            match n with
+            | n when n >= 2 -> GeneratedCode.UniversalHistory.List ||> fun name -> name, 2
+            | _ -> failwith "History State matrices are 2-local"
+
+        override this.Matrix name = GeneratedCode.UniversalHistory.Get name

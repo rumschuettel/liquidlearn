@@ -17,34 +17,45 @@ let MeasurementStatistics (ket : Liquid.Ket) (qubits : int list) =
 // interpret measurement result on controlled interaction
 let InterpretControlMeasurement (results : float list) (control : Graph.VertexT) =
     let interactions = control.Unwrap.interactions
-    let controlSlots = nextPowerOf2 (interactions.Length + 1)
-    let controlCount = (controlSlots - interactions.Length)
-    // sum control identity probabilities
-    let control =
-        match results |> List.take controlCount |> List.sum with
-        | 0.0 -> failwith "cannot determine interaction strength, as control qubit has zero weight"
-        | v -> v
+    let totalBlocks = nextPowerOf2 (interactions.Length + 1)
 
-    let results = results |> List.skip controlCount |> normalize ||> ( fun v -> v / control )        
+    // for e.g. 5 interactions, we reserved 3 qubits, so totalBlocks = 8; which should equal the measured qubit list (2^3=8)
+    assert (totalBlocks = results.Length)
+
+    // number of identity blocks in the top left
+    let controlBlocks = (totalBlocks - interactions.Length)
+
+    // support on control
+    let zeroInteractionSupport =
+        results
+        |> List.take controlBlocks
+        |> List.sum
+
+    let results =
+        results
+        |> List.skip controlBlocks
+        ||> (fun prob -> (prob - zeroInteractionSupport) * (float interactions.Length))
+
+
     List.zip interactions results
 
 
-[<StructuredFormatDisplay("TestResults {TableForm} \n")>]
+[<StructuredFormatDisplay("TestResults {TableForm}")>]
 type TestResults = {
         YesStats : (float*float) list
         NoStats  : (float*float) list
 }  with
     member this.TableForm =
-        join "\n" (
-            [ for (e, sigma) in this.YesStats -> sprintf "y\t%.2e\t%.2e" e sigma ]
+        join "" (
+            [ for (e, sigma) in this.YesStats -> sprintf "\n  y\t%.2e\t%.2e" e sigma ]
             @
-            [ for (e, sigma) in this.NoStats -> sprintf "n\t%.2e\t%.2e" e sigma ]
+            [ for (e, sigma) in this.NoStats -> sprintf "\n  n\t%.2e\t%.2e" e sigma ]
         )
 
     member this.ToFile (filename, ?append) =
         let append = defaultArg append false
         if append then
-            System.IO.File.AppendAllText(filename, "\n" + this.TableForm)
+            System.IO.File.AppendAllText(filename, this.TableForm)
         else
             System.IO.File.WriteAllText(filename, this.TableForm)
 
@@ -55,61 +66,80 @@ type SimpleControlledTrainer
     (
         graph : Graph.Hypergraph,
         interactions : Interactions.Sets.IInteractionFactory,
-        ?trainOnQudits : bool,
-        ?trotter : int
+        ?trainOnQudits : int,
+        ?maxVertices : int,
+        ?trotter : int,
+        ?resolution : int
     ) = class
-    let trainOnQudits = defaultArg trainOnQudits false
+    let trainOnQudits = defaultArg trainOnQudits 2
+    let maxVertices = defaultArg maxVertices 3
     let trotter = defaultArg trotter 20
-
-    // create controlled version of graph
-    let trainingGraph = graph.AddControls ( fun edge ->
-        if trainOnQudits then
-            [{
-                id = uniqueID;
-                interactions = interactions.ListPossibleInteractions edge
-            }]
-        else
-            [ for interaction in interactions.ListPossibleInteractions edge ->
-              {
-                id = uniqueID;
-                interactions = [interaction]
-            }]
-    )
+    let resolution = defaultArg resolution 20
 
     do
         Dumps "Simple Controlled Qubit Trainer"
-        dumps (sprintf "trainOnQudits=%s, trotter=%d" (if trainOnQudits then "yes" else "no") trotter)
+        dumps (sprintf "trainOnQudits=%s, trotter=%d, steps=%d" (if trainOnQudits > 1 then (sprintf "yes (%d)" trainOnQudits) else "no") trotter (12*resolution))
         dump graph
-        dumps "training on"
-        dump trainingGraph
+
+    // create controlled version of graph
+    let trainingGraph =
+        (graph.AddControls ( fun edge ->
+        // for now, every edge gets one control with all possible interactions on that edge
+            [{
+                id = UniqueID
+                interactions = interactions.ListPossibleInteractions edge
+            }]
+        )).OptimizeControls(
+            maxInteractions = (pown 2 trainOnQudits) - 1,
+            maxVertices = maxVertices
+        )   
+
+    do
+        dumps (sprintf "training on %A" trainingGraph)
         dumps (sprintf "with interaction set %A" interactions)
 
     // interactions to train
     let couplings = [
         for edge in trainingGraph.Edges do
-            yield Liquid.SpinTerm(
-                s = 1,
+            yield new Liquid.SpinTerm(
+                s = 2,
                 o = interactions.ControlledInteraction edge,
                 idx = trainingGraph.WhichQubits edge,
                 a = 1.0
             )
     ]
 
+    // annealing schedule
+    let schedule = [
+        0,              [|1.00; 0.00; 0.00|];
+        2*resolution,   [|1.00; 0.25; 0.00|];
+        12*resolution,  [|0.00; 1.00; 1.00|]
+    ]
+
     let mutable parameters = None
-    member this.Train (data : DataSet, ?dataProjectorWeight : float) =
+
+    // return size of training graph
+    member this.Size = trainingGraph.Size
+
+    // return training graph
+    member this.TrainingGraph = trainingGraph
+
+    // train dataset
+    member this.Train (data : DataSet, ?dataProjectorWeight : float, ?postSelector : string -> Liquid.Ket -> Liquid.Ket) =
         let dataProjectorWeight = defaultArg dataProjectorWeight 10.
+        let postSelector = defaultArg postSelector (fun _ -> id)
         // run training once for YES and once for NO-instances
 
         let results =
-            (("YES", data.YesInstances, -1.0), ("NO", data.NoInstances, 1.0))
+            (("YES", data, (1.0, -0.0)), ("NO", data, (-0.0, 1.0)))
             ||>
             ( fun (tag, data : DataSet, weight) ->
                 // projector on training data. Interaction strength scaled to be dominating term
-                dumps (sprintf "training %s (weight %.2f) using %A" tag weight data)
+                dumps (sprintf "training %s (weights %.2f, %.2f) using %A" tag (fst weight) (snd weight) data)
                 let projector =
-                    Liquid.SpinTerm(
-                        s = 2,
-                        o = Interactions.Projector (data.ValuatedList weight),
+                    new Liquid.SpinTerm(
+                        s = 1,
+                        o = Interactions.Projector (graph.Outputs.Length) (data.ValuatedList weight),
                         idx = trainingGraph.WhichQubits trainingGraph.Outputs,
                         a = dataProjectorWeight * (float trainingGraph.Size)
                     )
@@ -120,22 +150,19 @@ type SimpleControlledTrainer
                     tag = "train " + tag,
                     repeats = 20,
                     trotter = trotter,
-                    schedule = [
-                        0,    [|1.00; 0.00; 0.00|];
-                        50,   [|1.00; 0.25; 0.00|];
-                        200,  [|0.00; 1.00; 1.00|]
-                    ],
-                    res = 40,
+                    schedule = schedule,
+                    res = 3*resolution,
                     spin = spin,
                     runonce = true,
                     decohereModel = []
                 )
-                
+                // allow postselection function, also used for test injections
+                let ket = postSelector tag spin.Ket
 
                 // extract trained control probabilities
                 [ for edge in trainingGraph.Edges ->
                     let control = edge.GetControl
-                    let results = MeasurementStatistics spin.Ket ((trainingGraph.WhichQubits control))
+                    let results = MeasurementStatistics ket ((trainingGraph.WhichQubits control))
                     let weights = InterpretControlMeasurement results control
 
                     dumps (sprintf "un-normalized interaction probabilities for edge %A" edge.StripControl)
@@ -192,12 +219,11 @@ type SimpleControlledTrainer
         | Some parameters ->
             // build interactions from previously trained model
             let couplings = [
-                for p in parameters ->
-                    let (edge, name, strength) = p
-                    Liquid.SpinTerm(
+                for (_, interaction, strength) in parameters ->
+                    new Liquid.SpinTerm(
                         s = 1,
-                        o = interactions.Interaction name,
-                        idx = graph.WhichQubits edge,
+                        o = interactions.Interaction interaction,
+                        idx = graph.WhichQubits interaction.vertices,
                         a = strength
                     )
             ]
@@ -207,18 +233,14 @@ type SimpleControlledTrainer
                 tag = "test",
                 repeats = 20,
                 trotter = trotter,
-                schedule = [
-                    0,    [|1.00; 0.00; 0.00|];
-                    50,   [|1.00; 0.25; 0.00|];
-                    200,  [|0.00; 1.00; 1.00|]
-                ],
-                res = 40,
+                schedule = schedule,
+                res = 3*resolution,
                 spin = spin,
                 runonce = true,
                 decohereModel = []
             )
 
-            let state = Liquid.Ket(graph.Size)
+            let state = new Liquid.Ket(graph.Size)
             let qubits = state.Qubits
             let outputs = graph.WhichQubits graph.Outputs // list of qubits that act as output qubits
  
