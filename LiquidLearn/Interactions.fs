@@ -161,8 +161,6 @@ module Sets =
         // the size of the matrix has to be n qubits, where n is given to Names to yield the id.
         abstract member Matrix : string -> (float -> Liquid.CSMat)
 
-
-
         // for every edge, pass a list of interactions and the vertices within that edge
         // that the interaction is acting on nontrivially
         // the locality given for every name has to equal the size of the matrix returned by Matrix name
@@ -216,7 +214,7 @@ module Sets =
         override this.Matrix name = GeneratedCode.Rank1ProjectionMatrices.Get name
 
     // Compressed Random Matrices
-    // set of 5 random sparse Hermitian matrices
+    // set of 7 random sparse Hermitian matrices
     // These are 2-local 3-qubit interactions or 2-local 2-qubit
     type Random() =
         inherit IInteractionFactory()
@@ -233,7 +231,7 @@ module Sets =
         override this.Matrix name = GeneratedCode.SparseRandomHermitian.Get name
 
     // History State Matrices
-    // set of 5 special matrices from History state constructions, all 2-local
+    // set of 7 Hadamard-type matrices from History state constructions, all 2-local
     type History() =
         inherit IInteractionFactory()
 
@@ -247,3 +245,32 @@ module Sets =
             | _ -> failwith "History State matrices are 2-local"
 
         override this.Matrix name = GeneratedCode.UniversalHistory.Get name
+
+    // Heisenberg a XX + b YY + c ZZ, or 3-local variant
+    type Heisenberg() =
+        inherit IInteractionFactory()
+
+        override this.ShortForm = "Heisenberg"
+
+        override this.GateName list = sprintf "%d Heisenberg" list.Length
+
+        override this.Names n =
+            [["1"]; ["2"]; ["3"]]
+                ||> tuples n
+                |||> join ""
+                |> List.concat
+                ||> fun a -> (a, n)
+
+        override this.Matrix name = GeneratedCode.PauliProductMatrices.Get name
+
+    // Ising a XX + b Z
+    type Ising() =
+        inherit IInteractionFactory()
+
+        override this.ShortForm = "Ising"
+
+        override this.GateName list = sprintf "%d Ising" list.Length
+
+        override this.Names n = [("1", 1); ("33", 2)]
+
+        override this.Matrix name = GeneratedCode.PauliProductMatrices.Get name

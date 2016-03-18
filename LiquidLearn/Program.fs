@@ -49,7 +49,7 @@ module LearnApp =
                 let model = new SimpleControlledTrainer(graph, interaction, trainOnQudits = 5, maxVertices = 3, trotter = 25, resolution = 25)
                 let timeModelCreated = stopwatch.ElapsedMilliseconds
                
-                if model.Size > 18 then
+                if model.Size > 19 then
                     File.WriteAllText(filename + ".fail", sprintf "too many qubits needed: %d" model.Size)
                 else
                     // run model for every training set
@@ -70,9 +70,9 @@ module LearnApp =
     [<LQD>]
     let MSRSubmissionData() =
         let runs : ((DataSet*DataSet) list * EdgeT list * Sets.IInteractionFactory list) list = [
-            List.zip (AllDataSets 2) (AllDataSets 2), [ O"1" --- O"2" ], [Sets.Projectors(); Sets.Paulis(); Sets.History(); Sets.Random()]
-            List.zip (AllDataSets 2) (AllDataSets 2), [ O"1" --- V"h"; V"h" --- O"2" ], [Sets.Projectors(); Sets.Paulis(); Sets.History(); Sets.Random()]
-            List.zip (AllDataSets 3) (AllDataSets 3), [ O"1" --- V"h"; V"h" --- O"2"; V"h" --- O"3" ], [Sets.Projectors(); Sets.Paulis(); Sets.History(); Sets.Random()]
+            List.zip (AllDataSets 2) (AllDataSets 2), [ O"1" --- O"2" ], [Sets.Projectors(); Sets.Paulis(); Sets.Heisenberg(); Sets.Ising(); Sets.Random()]
+            List.zip (AllDataSets 2) (AllDataSets 2), [ O"1" --- V"h"; V"h" --- O"2" ], [Sets.Projectors(); Sets.Paulis(); Sets.Heisenberg(); Sets.Ising(); Sets.Random()]
+            List.zip (AllDataSets 3) (AllDataSets 3), [ O"1" --- V"h"; V"h" --- O"2"; V"h" --- O"3" ], [Sets.Projectors(); Sets.Heisenberg(); Sets.Ising(); Sets.Random(); Sets.Paulis()]
         ]
 
         runs ||> Run |> ignore
@@ -81,10 +81,10 @@ module LearnApp =
 
     [<LQD>]
     let Learn() =
-        let data = (AllDataSets 2) |> List.take 1
-        let edges = [ O"1" --- V"h"; V"h" --- O"2" ]
+        let data = (AllDataSets 2) |> List.take 3
+        let edges = [ O"1" --- O"2" ]
         let graph = new Hypergraph(edges)
-        let model = new SimpleControlledTrainer(graph, Sets.Paulis(), trainOnQudits = 5, maxVertices = 3)
+        let model = new SimpleControlledTrainer(graph, Sets.Ising(), trainOnQudits = 5, maxVertices = 3)
 
         data
             ||> fun d -> 
