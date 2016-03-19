@@ -11,14 +11,16 @@ let nextPowerOf2 n = 2.0**(log2 n |> ceil) |> round |> int
 
 // aliases, shortcuts and F# greatness
 let join = String.concat
+let pluralS n =
+    if abs n = 1 then "" else "s"
 
 
 type PipeForwardT = PipeForwardT with
-    static member inline ($) (PipeForwardT, list: seq<'a>) = fun f -> list |> Seq.map f
-    static member inline ($) (PipeForwardT, list: 'a []) = fun f -> list |> Array.map f
-    static member inline ($) (PipeForwardT, list: Set<'a>) = fun f -> list |> Set.map f
-    static member inline ($) (PipeForwardT, list: 'a list) = fun f -> list |> List.map f
-    static member inline ($) (PipeForwardT, (a, b): 'a * 'a) = fun f -> [a; b] |> List.map f |> function | [a; b] -> (a, b) | _ -> failwith "does not happen"
+    static member inline ($) (PipeForwardT, list: 'a list) = fun f -> List.map f list
+    static member inline ($) (PipeForwardT, list: Set<'a>) = fun f -> Set.map f list
+    static member inline ($) (PipeForwardT, list: seq<'a>) = fun f -> Seq.map f list
+    static member inline ($) (PipeForwardT, list: 'a []) = fun f -> Array.map f list
+    static member inline ($) (PipeForwardT, (a, b): 'a * 'a) = fun f -> (f a, f b)
 
 let inline (||>) list f = (PipeForwardT $ list) f
 let inline (|||>) listofLists f = listofLists ||> (fun list -> list ||> f)
@@ -105,6 +107,10 @@ let getPermutation (l1 : 'a list) (l2 : 'a list) : int -> int =
             ||> function Some n -> n | None -> failwith "no permutation found"
 
         function n when ((0 <= n) && (n < lookup.Length)) -> lookup.[n] | n -> n
+
+// permute a list given the permutation function
+let permute f (list: 'a list) =
+    [ for i in 0..list.Length-1 -> list.[f(i)] ]
             
 // powerset
 let rec powerset list = 
@@ -136,7 +142,7 @@ let dump sth =
 
 // unique incrementing id
 let mutable internal _uniqueIDCounter = 0
-let UniqueID =
+let UniqueID() =
     _uniqueIDCounter <- _uniqueIDCounter + 1
     string _uniqueIDCounter
 

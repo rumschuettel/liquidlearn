@@ -159,18 +159,26 @@ type Hypergraph(edges : EdgeT list) = class
         (
             maxInteractions : int,
             maxVertices : int,
-            ?avoidSplittingEdges : bool
+            ?avoidSplittingEdges : bool,
+            ?deleteDuplicateInteractions : bool
         ) =
         let avoidSplittingEdges = defaultArg avoidSplittingEdges true
+        let deleteDuplicateInteractions = defaultArg deleteDuplicateInteractions true
         // this is a variant of integer list partitioning, which is known to be NP-hard
         // we use a poly-time greedy approximation, known to lie within 7/6 of the optimal solution
+        
+        // extract a list of all interactions in the graph, delete potential duplicates and shuffle
         let interactions =
             this.Controls
             ||> fun control -> control.Unwrap.interactions
-            |> Array.ofList
+            |> List.concat
+            |> fun interactions ->
+                if deleteDuplicateInteractions then
+                    interactions |> Set.ofList |> Set.toArray
+                else
+                    interactions |> List.toArray
             |> shuffle
             |> Array.toList
-            |> List.concat
 
         // count vertices in interaction sequence
         let countVertices interactions =
@@ -237,25 +245,31 @@ type Hypergraph(edges : EdgeT list) = class
                 
                 match tryDistribute interactions with
                 | true ->
-                    dumps (sprintf "try OptimizeControls with %d edge%s: OK" n (if n = 1 then "" else "s"))
+                    // return with good partition
                     partition
                 | false ->
-                    dumps (sprintf "try OptimizeControls with %d edge%s: fail" n (if n = 1 then "" else "s"))
+                    // try with one more edge
                     tryPartition (n+1)
         
         // try building new graph with optimized interactions
+        // since this is a stochastic algorithm, we try a few times and take the most optimal result
         try
-            new Hypergraph
-                ([ for part in tryPartition 0 ->
-                    let edge =
-                        part
-                        ||> (fun interaction -> interaction.vertices)
-                        |> List.concat
-                        |> Set.ofList
-                        |> EdgeT
+            let g =
+                [ for _ in 1..50 ->
+                    new Hypergraph
+                        ([ for part in tryPartition 0 ->
+                            let edge =
+                                part
+                                ||> (fun interaction -> interaction.vertices)
+                                |> List.concat
+                                |> Set.ofList
+                                |> EdgeT
 
-                    C { id=UniqueID; interactions=part } --- edge
-                ])
+                            C { id=UniqueID(); interactions=part } --- edge
+                        ])
+                ] |> List.minBy (fun g -> g.Size)
+            dumps (sprintf "optimized graph with %d edge%s and %d qubit%s found" g.Edges.Length (pluralS g.Edges.Length) g.Size (pluralS g.Size) )
+            g
         with
         | NoOptimalGraphFound ->
             dumps "WARN: no more optimal graph within restricted parameters found."
