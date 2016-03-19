@@ -32,23 +32,22 @@ module LearnApp =
             |> permutations // and all possible permutations of these datasets
             ||> SplitYesNo // create all possible training sets
 
-        let addSymmetries =
-            allPossible
-            |||> fun set -> symmetries ||> (fun s -> set ||> permute s)
-
         let duplicatesRemoved =
-            addSymmetries
-            ||||> Set.ofList
+            allPossible
             |||> Set.ofList // delete all duplicates, e.g. yes and no swapped, order of data in yes or no (training being symmetric)
             ||> Set.ofList
-            |> Set.ofList
-            |> Set.toList
-            ||> Set.toList
+            |> List.distinct
             |||> Set.toList
-            ||||> Set.toList
-            |||> fun equivalentSets -> equivalentSets.[0]
+            ||> Set.toList
 
-        duplicatesRemoved
+        let symmetriesRemoved =
+            duplicatesRemoved
+                |> List.distinctBy (fun instances ->
+                    let withSymmetries = symmetries ||> (fun s -> instances |||> permute s)
+                    Set.ofList withSymmetries
+                )
+
+        symmetriesRemoved
             ||||> join ""
             ||||> FromString
             ||> fun sets -> { Yes = sets.[0]; No = sets.[1] }
@@ -83,6 +82,7 @@ module LearnApp =
         for interaction in interactions do
             let filename = sprintf "graph-%s-%s-data-%d" graph.ShortForm interaction.ShortForm datasets.Length 
             if not <| File.Exists(filename + ".stats") then
+                File.Create(filename + ".stats") |> ignore
                 if File.Exists(filename + ".test") then File.Delete(filename + ".test")
 
                 let stopwatch = Stopwatch.StartNew()
@@ -136,8 +136,6 @@ module LearnApp =
 
     [<LQD>]
     let Learn() =
-        MSRSubmissionData()
-
         let data = (AllDataSets 2 []) |> List.take 3
         let edges = [ O"1" --- O"2" ]
         let graph = new Hypergraph(edges)
