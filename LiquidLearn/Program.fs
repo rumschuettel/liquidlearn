@@ -87,10 +87,10 @@ module LearnApp =
 
                 let stopwatch = Stopwatch.StartNew()
 
-                let model = new SimpleControlledTrainer(graph, interaction, trainOnQudits = 5, maxVertices = 5, trotter = 25, resolution = 25)
+                let model = new SimpleControlledTrainer(graph, interaction, trainOnQudits = 5, maxVertices = 4, trotter = 25, resolution = 25)
                 let timeModelCreated = stopwatch.ElapsedMilliseconds
                
-                if model.Size > 19 then
+                if model.Size > 22 then
                     dumps (sprintf "too many qubits needed: %d. Aborting." model.Size)
                     File.WriteAllText(filename + ".fail", sprintf "too many qubits needed: %d" model.Size)
                 else
@@ -110,27 +110,49 @@ module LearnApp =
 
 
     [<LQD>]
-    let MSRSubmissionData() =
-        // training data
-        let symmetry2 = permutations [1; 2] ||> fun a -> [1; 2], a
-        let symmetry3 = permutations [1; 2; 3] ||> fun a -> [1; 2; 3], a
+    let MSRSubmissionData(mode : string) =
+        match mode with
+        | "benchmark" ->
+            // training data
+            let symmetry2 = permutations [1; 2] ||> fun a -> [1; 2], a
+            let symmetry3 = permutations [1; 2; 3] ||> fun a -> [1; 2; 3], a
 
-        let dataSets2 = AllDataSets 2 symmetry2 |> fun a -> List.zip a a
-        let dataSets3 = AllDataSets 3 symmetry3 |> fun a -> List.zip a a
+            let dataSets2 = AllDataSets 2 symmetry2 |> fun a -> List.zip a a
+            let dataSets3 = AllDataSets 3 symmetry3 |> fun a -> List.zip a a
 
-        let dataSets6 = SomeDataSets 6 10 5 25 |> fun a -> List.zip a a
+            let dataSets6 = SomeDataSets 6 10 5 25 |> fun a -> List.zip a a
 
-        // batch list of runs
-        let runs : ((DataSet*DataSet) list * EdgeT list * Sets.IInteractionFactory list) list = [
-            dataSets2, [ O"1" --- O"2" ], [Sets.Projectors(); Sets.Paulis(); Sets.Heisenberg(); Sets.Ising(); Sets.Random()]
-            dataSets2, [ O"1" --- V"h"; V"h" --- O"2" ], [Sets.Projectors(); Sets.Paulis(); Sets.Heisenberg(); Sets.Ising(); Sets.Random()]
-            dataSets3, [ O"1" --- V"h"; V"h" --- O"2"; V"h" --- O"3" ], [Sets.Projectors(); Sets.Heisenberg(); Sets.Ising(); Sets.Random(); Sets.Paulis()]
+            // batch list of runs
+            let runs : ((DataSet*DataSet) list * EdgeT list * Sets.IInteractionFactory list) list = [
+                dataSets2, [ O"1" --- O"2" ], [Sets.Projectors(); Sets.Paulis(); Sets.Heisenberg(); Sets.Ising(); Sets.Random()]
+                dataSets2, [ O"1" --- V"h"; V"h" --- O"2" ], [Sets.Projectors(); Sets.Paulis(); Sets.Heisenberg(); Sets.Ising(); Sets.Random()]
+                dataSets3, [ O"1" --- V"h"; V"h" --- O"2"; V"h" --- O"3" ], [Sets.Projectors(); Sets.Heisenberg(); Sets.Ising(); Sets.Random(); Sets.Paulis()]
             
-            dataSets6, [ O"1" --- V"a"; V"a" --- O"4"; V"a" --- O"2"; V"a" --- V"b"; V"a" --- O"5"; O"2" --- V"b"; O"5" --- V"b"; V"b" --- O"3"; V"b" --- O"6"], [ Sets.Projectors(); Sets.Ising(); Sets.Heisenberg()  ]
-        ]
+                dataSets6, [ O"1" --- V"a"; V"a" --- O"4"; V"a" --- O"2"; V"a" --- V"b"; V"a" --- O"5"; O"2" --- V"b"; O"5" --- V"b"; V"b" --- O"3"; V"b" --- O"6"], [ Sets.Projectors(); Sets.Ising(); Sets.Heisenberg()  ]
+            ]
 
-        // run
-        runs ||> Run |> ignore
+            // run
+            runs ||> Run |> ignore
+
+        | "color" ->
+            let edges = [
+                O"r1" --- V"c"
+                O"r2" --- V"c"
+                O"r3" --- V"c"
+
+                O"g1" --- V"c"
+                O"g2" --- V"c"
+                O"g3" --- V"c"
+
+                O"b1" --- V"c"
+                O"b2" --- V"c"
+                O"b3" --- V"c"
+            ]
+
+            Run([LearnAppData.ColourDataset, { Yes = LearnAppData.AllColours; No = [] }], edges, [Sets.Projectors()])
+
+        | _ ->
+            dumps "specify either \"benchmark\" or \"color\" as argument to MSRSubmissionData()"
 
         ()
 
