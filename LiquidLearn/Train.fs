@@ -68,11 +68,13 @@ type SimpleControlledTrainer
         interactions : Interactions.Sets.IInteractionFactory,
         ?trainOnQudits : int,
         ?maxVertices : int,
+        ?avoidSplittingEdges : bool,
         ?trotter : int,
         ?resolution : int
     ) = class
     let trainOnQudits = defaultArg trainOnQudits 2
     let maxVertices = defaultArg maxVertices 3
+    let avoidSplittingEdges = defaultArg avoidSplittingEdges true
     let trotter = defaultArg trotter 20
     let resolution = defaultArg resolution 20
 
@@ -91,7 +93,8 @@ type SimpleControlledTrainer
             }]
         )).OptimizeControls(
             maxInteractions = (pown 2 trainOnQudits) - 1,
-            maxVertices = maxVertices
+            maxVertices = maxVertices,
+            avoidSplittingEdges = avoidSplittingEdges
         )   
 
     do
@@ -149,7 +152,7 @@ type SimpleControlledTrainer
                 let spin = new Liquid.Spin(projector :: couplings, trainingGraph.Size, Liquid.RunMode.Trotter1X)
                 Liquid.Spin.Test(
                     tag = "train " + tag,
-                    repeats = 20,
+                    repeats = 1,
                     trotter = trotter,
                     schedule = schedule,
                     res = 3*resolution,
@@ -232,7 +235,7 @@ type SimpleControlledTrainer
             let spin = new Liquid.Spin(couplings, graph.Size, Liquid.RunMode.Trotter1X)
             Liquid.Spin.Test(
                 tag = "test",
-                repeats = 20,
+                repeats = 1,
                 trotter = trotter,
                 schedule = schedule,
                 res = 3*resolution,
@@ -246,18 +249,16 @@ type SimpleControlledTrainer
             let outputs = graph.WhichQubits graph.Outputs // list of qubits that act as output qubits
  
             // set part of state vector that is not output to |0> + |1>, so that we partially trace out the hidden part
-            [ for i in 0..graph.Size-1 -> i ] |> List.map (fun i ->
+            for i in 0..graph.Size-1 do
                 if not (contains i outputs) then
                     qubits.[i].StateSet(1., 0., 1., 0.)
-            ) |> ignore
 
             let updateStateData (data : DataT) =
-                [ for i in 0..outputs.Length-1 -> i ] |> List.map (fun i ->
+                for i in 0..outputs.Length-1 do
                     match data.[i] with
                     | BitT.Zero _ -> qubits.[outputs.[i]].StateSet(Liquid.Zero)
                     | BitT.One _ -> qubits.[outputs.[i]].StateSet(Liquid.One)
                     | _ -> failwith "invalid bit type"
-                ) |> ignore
             
             // build statistics
             let yesStats = [

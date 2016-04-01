@@ -18,8 +18,8 @@ let pluralS n =
 type PipeForwardT = PipeForwardT with
     static member inline ($) (PipeForwardT, list: 'a list) = fun f -> List.map f list
     static member inline ($) (PipeForwardT, list: Set<'a>) = fun f -> Set.map f list
-    static member inline ($) (PipeForwardT, list: seq<'a>) = fun f -> Seq.map f list
     static member inline ($) (PipeForwardT, list: 'a []) = fun f -> Array.map f list
+    static member inline ($) (PipeForwardT, list: seq<'a>) = fun f -> Seq.map f list
     static member inline ($) (PipeForwardT, (a, b): 'a * 'a) = fun f -> (f a, f b)
 
 let inline (||>) list f = (PipeForwardT $ list) f
