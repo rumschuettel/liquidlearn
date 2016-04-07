@@ -87,7 +87,7 @@ module LearnApp =
 
                 let stopwatch = Stopwatch.StartNew()
 
-                let model = new SimpleControlledTrainer(graph, interaction, trainOnQudits = 5, maxVertices = 4, trotter = 25, resolution = 25)
+                let model = new SimpleControlledTrainer(graph, interaction, trainOnQudits = 5, maxVertices = 4, trotter = 50, resolution = 50)
                 let timeModelCreated = stopwatch.ElapsedMilliseconds
                
                 if model.Size > 22 then
@@ -157,11 +157,11 @@ module LearnApp =
         ()
 
     [<LQD>]
-    let Learn() =
+    let HelloWorld() =
         let data = (AllDataSets 2 []) |> List.take 3
         let edges = [ O"1" --- O"2" ]
         let graph = new Hypergraph(edges)
-        let model = new SimpleControlledTrainer(graph, Sets.Ising(), trainOnQudits = 5, maxVertices = 3)
+        let model = new SimpleControlledTrainer(graph, Sets.Random(), trainOnQudits = 2, maxVertices = 3, avoidSplittingEdges = true, resolution = 50)
 
         data
             ||> fun d -> 
