@@ -1,0 +1,22 @@
+timeModelCreated 25
+timeDone 2082256
+arg per run 1041128
+Hypergraph 
+  vertices: (h, [0]) (*1, [1]) (*2, [2]) 
+  edges:    (h --- *1) (h --- *2) 
+Hypergraph 
+  vertices: (h, [0]) (*1, [1]) (*2, [2]) (c310 (16), [3; 4; 5; 6; 7]) (c311 (16), [8; 9; 10; 11; 12]) 
+  edges:    (c310 (16) --- h --- *1) (c311 (16) --- h --- *2) 
+
+Paulis
+
+[(DataSet 
+  yes: 00, 01
+  no:  10, 11, DataSet 
+  yes: 00, 01
+  no:  10, 11);
+ (DataSet 
+  yes: 00, 11
+  no:  01, 10, DataSet 
+  yes: 00, 11
+  no:  01, 10)]

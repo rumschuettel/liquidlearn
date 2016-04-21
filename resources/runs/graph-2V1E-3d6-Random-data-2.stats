@@ -1,0 +1,22 @@
+timeModelCreated 3
+timeDone 22652
+arg per run 11326
+Hypergraph 
+  vertices: (*1, [0]) (*2, [1]) 
+  edges:    (*1 --- *2) 
+Hypergraph 
+  vertices: (*1, [0]) (*2, [1]) (c206 (7), [2; 3; 4]) 
+  edges:    (c206 (7) --- *1 --- *2) 
+
+Random
+
+[(DataSet 
+  yes: 00, 01
+  no:  10, 11, DataSet 
+  yes: 00, 01
+  no:  10, 11);
+ (DataSet 
+  yes: 00, 11
+  no:  01, 10, DataSet 
+  yes: 00, 11
+  no:  01, 10)]

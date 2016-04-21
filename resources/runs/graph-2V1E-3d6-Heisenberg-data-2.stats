@@ -1,0 +1,22 @@
+timeModelCreated 4
+timeDone 2433
+arg per run 1216
+Hypergraph 
+  vertices: (*1, [0]) (*2, [1]) 
+  edges:    (*1 --- *2) 
+Hypergraph 
+  vertices: (*1, [0]) (*2, [1]) (c104 (3), [2; 3]) 
+  edges:    (c104 (3) --- *1 --- *2) 
+
+Heisenberg
+
+[(DataSet 
+  yes: 00, 01
+  no:  10, 11, DataSet 
+  yes: 00, 01
+  no:  10, 11);
+ (DataSet 
+  yes: 00, 11
+  no:  01, 10, DataSet 
+  yes: 00, 11
+  no:  01, 10)]
