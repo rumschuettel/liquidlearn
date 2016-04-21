@@ -167,10 +167,10 @@ module Train =
             trainer.Train(dataset, 10.0, fun _ ket ->
                 // expect the simulation to use 3 qubits, as we need to control one interaction
                 ket.Qubits.Length |> should equal 3
-                // absolutely no bias, as there's no data
-                ket.Qubits.Item(0).Prob1 |> should equal 0.5
-                ket.Qubits.Item(1).Prob1 |> should equal 0.5
-                ket.Qubits.Item(2).Prob1 |> should equal 0.5
+                // no bias, as there's no data
+                System.Math.Round(ket.Qubits.Item(0).Prob1, 6) |> should equal 0.5
+                System.Math.Round(ket.Qubits.Item(1).Prob1, 6) |> should equal 0.5
+                System.Math.Round(ket.Qubits.Item(2).Prob1, 6) |> should equal 0.5
 
                 ket
             ).Test(dataset) |> should equal { YesStats = []; NoStats = [] }
