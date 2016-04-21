@@ -1,0 +1,22 @@
+timeModelCreated 5
+timeDone 516744
+arg per run 258372
+Hypergraph 
+  vertices: (h, [0]) (*1, [1]) (*2, [2]) 
+  edges:    (h --- *1) (h --- *2) 
+Hypergraph 
+  vertices: (h, [0]) (*1, [1]) (*2, [2]) (c258 (8), [3; 4; 5; 6]) 
+  edges:    (c258 (8) --- h --- *1 --- *2) 
+
+Projectors
+
+[(DataSet 
+  yes: 00, 01
+  no:  10, 11, DataSet 
+  yes: 00, 01
+  no:  10, 11);
+ (DataSet 
+  yes: 00, 11
+  no:  01, 10, DataSet 
+  yes: 00, 11
+  no:  01, 10)]

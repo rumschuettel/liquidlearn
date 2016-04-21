@@ -1,0 +1,22 @@
+timeModelCreated 4
+timeDone 113150
+arg per run 56575
+Hypergraph 
+  vertices: (h, [0]) (*1, [1]) (*2, [2]) 
+  edges:    (h --- *1) (h --- *2) 
+Hypergraph 
+  vertices: (h, [0]) (*1, [1]) (*2, [2]) (c464 (5), [3; 4; 5]) 
+  edges:    (c464 (5) --- h --- *1 --- *2) 
+
+Ising
+
+[(DataSet 
+  yes: 00, 01
+  no:  10, 11, DataSet 
+  yes: 00, 01
+  no:  10, 11);
+ (DataSet 
+  yes: 00, 11
+  no:  01, 10, DataSet 
+  yes: 00, 11
+  no:  01, 10)]
