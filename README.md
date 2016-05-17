@@ -1,6 +1,6 @@
 LiquidLearn
 ===========
-> LiquidLearn is a simulator for quantum neural networks, based on Microsoft Liquid, and part of my submission to the Microsoft Quantum Challenge in April 2016. It won the [second price](http://research.microsoft.com/en-us/projects/liquid/challenge.aspx), together with some other amazing submissions!
+> LiquidLearn is a simulator for quantum neural networks, based on Microsoft Liquid, and part of my submission to the Microsoft Quantum Challenge in April 2016. It won the [second price](https://blogs.msdn.microsoft.com/msr_er/2016/05/16/microsoft-quantum-challenge-results-are-in/), together with some other amazing submissions!
 
 I plan to update the codebase around July to make it more user-friendly, so feel free to send me suggestions or comments.
 
